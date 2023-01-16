@@ -1,6 +1,6 @@
 /**
 * This file is part of DSO.
-* 
+*
 * Copyright 2016 Technical University of Munich and Intel.
 * Developed by Jakob Engel <engelj at in dot tum dot de>,
 * for more information see <http://vision.in.tum.de/dso>.
@@ -35,25 +35,25 @@ namespace SFRSS
 
 // reads interpolated element from a uchar* array
 // SSE2 optimization possible
-EIGEN_ALWAYS_INLINE float getInterpolatedElement(const float* const mat, const float x, const float y, const int width)
-{
-	//stats.num_pixelInterpolations++;
+float getInterpolatedElement(const float* const mat, const float x, const float y, const int width);
+// {
+// 	//stats.num_pixelInterpolations++;
 
-	int ix = (int)x;
-	int iy = (int)y;
-	float dx = x - ix;
-	float dy = y - iy;
-	float dxdy = dx*dy;
-	const float* bp = mat +ix+iy*width;
+// 	int ix = (int)x;
+// 	int iy = (int)y;
+// 	float dx = x - ix;
+// 	float dy = y - iy;
+// 	float dxdy = dx*dy;
+// 	const float* bp = mat +ix+iy*width;
 
 
-	float res =   dxdy * bp[1+width]
-				+ (dy-dxdy) * bp[width]
-				+ (dx-dxdy) * bp[1]
-				+ (1-dx-dy+dxdy) * bp[0];
+// 	float res =   dxdy * bp[1+width]
+// 				+ (dy-dxdy) * bp[width]
+// 				+ (dx-dxdy) * bp[1]
+// 				+ (1-dx-dy+dxdy) * bp[0];
 
-	return res;
-}
+// 	return res;
+// }
 
 // 在数据单元长度为4个float长度的map中对前三个数据单元插值，即返回的是一个三单元vector
 EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement43(const Eigen::Vector4f* const mat, const float x, const float y, const int width)

@@ -6,6 +6,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/core/version.hpp>
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <vector>
 

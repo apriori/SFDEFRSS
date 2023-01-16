@@ -2,7 +2,8 @@
 
 #pragma once
 
-#include <math.h>
+#define _USE_MATH_DEFINES
+#include <cmath>
 #include <opencv2/core/core.hpp>
 #include <opencv2/opencv.hpp>
 #include "vector"
@@ -67,7 +68,7 @@ public:
 	Pnt* points[PYR_LEVELS];
 	int numPoints[PYR_LEVELS];
 
-	
+
 	// New
 	std::vector<double> Optimize3_withdepths_MT(std::vector<double> motionState, int pyramidLvl, bool FixTranslation);
 

@@ -1,6 +1,6 @@
 /**
 * This file is part of DSO.
-* 
+*
 * Copyright 2016 Technical University of Munich and Intel.
 * Developed by Jakob Engel <engelj at in dot tum dot de>,
 * for more information see <http://vision.in.tum.de/dso>.
@@ -24,6 +24,8 @@
 
 #pragma once
 
+#define _USE_MATH_DEFINES
+#include <cmath>
 #include "Eigen/Core"
 #include "../../Thirdparty/Sophus/sophus/sim3.hpp"
 #include "../../Thirdparty/Sophus/sophus/se3.hpp"

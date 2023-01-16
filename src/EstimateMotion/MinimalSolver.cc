@@ -1,4 +1,5 @@
-#include <math.h>
+#define _USE_MATH_DEFINES
+#include <cmath>
 #include <iostream>
 #include "MinimalSolver.h"
 #include <string.h>
@@ -42,7 +43,7 @@ int rref(double * A, int m, int n, int threadID) // m:H,n:W
 
 	int i = 0;
 	int j = 0;
-	while ((i < m) && (j < n)){	
+	while ((i < m) && (j < n)){
 		int k = i;
 		double p = fabs(A[i*n + j]);
 		for (int ii = i + 1; ii < m; ++ii){
@@ -426,7 +427,7 @@ int MinSolver(double * R11, double * ptRes, int threadID){
 
 
     for (int ii = 0; ii < 38; ++ii){
-        M[c1[ii]] = c[1]; 
+        M[c1[ii]] = c[1];
         M[c2[ii]] = c[2];
     	M[c3[ii]] = c[3];
     	M[c4[ii]] = c[4];
@@ -436,8 +437,8 @@ int MinSolver(double * R11, double * ptRes, int threadID){
     	M[c8[ii]] = c[8];
         M[c9[ii]] = c[9];
 
-        M[c10[ii]] = c[10]; 
-        M[c11[ii]] = c[11]; 
+        M[c10[ii]] = c[10];
+        M[c11[ii]] = c[11];
         M[c12[ii]] = c[12];
     	M[c13[ii]] = c[13];
     	M[c14[ii]] = c[14];
@@ -447,8 +448,8 @@ int MinSolver(double * R11, double * ptRes, int threadID){
     	M[c18[ii]] = c[18];
         M[c19[ii]] = c[19];
 
-        M[c20[ii]] = c[20]; 
-        M[c21[ii]] = c[21]; 
+        M[c20[ii]] = c[20];
+        M[c21[ii]] = c[21];
         M[c22[ii]] = c[22];
     	M[c23[ii]] = c[23];
     	M[c24[ii]] = c[24];
@@ -458,8 +459,8 @@ int MinSolver(double * R11, double * ptRes, int threadID){
     	M[c28[ii]] = c[28];
         M[c29[ii]] = c[29];
 
-        M[c30[ii]] = c[30]; 
-        M[c31[ii]] = c[31]; 
+        M[c30[ii]] = c[30];
+        M[c31[ii]] = c[31];
         M[c32[ii]] = c[32];
     	M[c33[ii]] = c[33];
     	M[c34[ii]] = c[34];
@@ -469,8 +470,8 @@ int MinSolver(double * R11, double * ptRes, int threadID){
     	M[c38[ii]] = c[38];
         M[c39[ii]] = c[39];
 
-        M[c40[ii]] = c[40]; 
-        M[c41[ii]] = c[41]; 
+        M[c40[ii]] = c[40];
+        M[c41[ii]] = c[41];
         M[c42[ii]] = c[42];
     	M[c43[ii]] = c[43];
     	M[c44[ii]] = c[44];
@@ -480,8 +481,8 @@ int MinSolver(double * R11, double * ptRes, int threadID){
     	M[c48[ii]] = c[48];
         M[c49[ii]] = c[49];
 
-        M[c50[ii]] = c[50]; 
-        M[c51[ii]] = c[51]; 
+        M[c50[ii]] = c[50];
+        M[c51[ii]] = c[51];
         M[c52[ii]] = c[52];
     	M[c53[ii]] = c[53];
     	M[c54[ii]] = c[54];
@@ -491,8 +492,8 @@ int MinSolver(double * R11, double * ptRes, int threadID){
     	M[c58[ii]] = c[58];
         M[c59[ii]] = c[59];
 
-        M[c60[ii]] = c[60]; 
-        M[c61[ii]] = c[61]; 
+        M[c60[ii]] = c[60];
+        M[c61[ii]] = c[61];
         M[c62[ii]] = c[62];
     	M[c63[ii]] = c[63];
     	M[c64[ii]] = c[64];
@@ -505,7 +506,7 @@ int MinSolver(double * R11, double * ptRes, int threadID){
 			M[c69[ii]] = c[69];
 			M[c70[ii]] = c[70];
 
-			M[c71[ii]] = c[71]; 
+			M[c71[ii]] = c[71];
 			M[c72[ii]] = c[72];
 			M[c73[ii]] = c[73];
 			M[c74[ii]] = c[74];
@@ -517,7 +518,7 @@ int MinSolver(double * R11, double * ptRes, int threadID){
 			M[c80[ii]] = c[80];
 		}
 		if (ii < 30){
-			M[c81[ii]] = c[81]; 
+			M[c81[ii]] = c[81];
 			M[c82[ii]] = c[82];
 			M[c83[ii]] = c[83];
 			M[c84[ii]] = c[84];
@@ -528,7 +529,7 @@ int MinSolver(double * R11, double * ptRes, int threadID){
 			M[c89[ii]] = c[89];
 			M[c90[ii]] = c[90];
 
-			M[c91[ii]] = c[91]; 
+			M[c91[ii]] = c[91];
 			M[c92[ii]] = c[92];
 			M[c93[ii]] = c[93];
 			M[c94[ii]] = c[94];

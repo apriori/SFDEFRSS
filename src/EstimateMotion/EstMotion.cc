@@ -1,3 +1,6 @@
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 
 #include "EstMotion.h"
 #include <opencv2/core/core.hpp>
@@ -206,7 +209,7 @@ vector<string> split(const string &s, const string &seperator){
             break;
             }
         }
-    
+
         flag = 0;
         string_size j = i;
         while(j != s.size() && flag == 0){
@@ -215,7 +218,7 @@ vector<string> split(const string &s, const string &seperator){
                     flag = 1;
                     break;
                 }
-            if(flag == 0) 
+            if(flag == 0)
                 ++j;
         }
         if(i != j){
@@ -280,7 +283,7 @@ vector<vector<double>> EstMotion::Est(const cv::Mat &left, const cv::Mat &right,
     // Try to initialize
     if ((int)mLeftFrame.mvKeys.size() <= 100 || (int)mRightFrame.mvKeys.size() <= 100)
     {
-        std::cout << "The number of extracted features is too small!" << (int)mLeftFrame.mvKeys.size() 
+        std::cout << "The number of extracted features is too small!" << (int)mLeftFrame.mvKeys.size()
                                                              << (int)mRightFrame.mvKeys.size() << std::endl;
         return vector<vector<double>>();
     }
@@ -308,7 +311,7 @@ vector<vector<double>> EstMotion::Est(const cv::Mat &left, const cv::Mat &right,
         }
 
         // record epiDist
-        FILE * fp = fopen((mBasePath + "/RSResult/epiDist/" + imageName + ".txt").c_str(), "w");        
+        FILE * fp = fopen((mBasePath + "/RSResult/epiDist/" + imageName + ".txt").c_str(), "w");
         for (unsigned int ii = 0; ii < epiDist.size(); ++ii){
             fprintf(fp, "%f\n", epiDist[ii]);
         }
@@ -357,7 +360,7 @@ vector<vector<double>> EstMotion::Est(const cv::Mat &left, const cv::Mat &right,
         delete mpInitializer;
     mpInitializer = new Initializer(mLeftFrame, 1.0, 200, "/home/wangke/project/SFRSS/debug/" + imageName);
 
-    cv::Mat Rcw; // Current Camera Rotation 
+    cv::Mat Rcw; // Current Camera Rotation
     cv::Mat tcw; // Current Camera Translation
     vector<bool> vbTriangulated; // Triangulated Correspondences (mvIniMatches)
 
@@ -373,11 +376,11 @@ vector<vector<double>> EstMotion::Est(const cv::Mat &left, const cv::Mat &right,
 }
 
 vector<vector<double>> EstMotion::GetProjRes(){
-    return mpInitializer->GetProjRes();    
+    return mpInitializer->GetProjRes();
 }
 
 vector<vector<double>> EstMotion::GetCloseFormRes(){
-    return mpInitializer->GetCloseFormRes();    
+    return mpInitializer->GetCloseFormRes();
 }
 
 void EstMotion::Reset()

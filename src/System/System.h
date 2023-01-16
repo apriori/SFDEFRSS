@@ -1,11 +1,10 @@
 #ifndef SYSTEM_H
 #define SYSTEM_H
 
-#include <unistd.h>
 #include <string>
 #include <thread>
 #include <opencv2/core/core.hpp>
-#include "../EstimateMotion/EstMotion.h" 
+#include "../EstimateMotion/EstMotion.h"
 #include "../EstimateDepths/include/stereomatch.h"
 #include "../RefineMotion/RefineMotion.h"
 
@@ -19,7 +18,7 @@ class RefineMotion;
 enum WROK_MODE{
     RAW_MODE,
     MIDDLE_MODE,
-    FINAL_MODE, 
+    FINAL_MODE,
     STAND_MODE, // same with global shutter
     CALC_STATE_MODE, // just estimate states
 };

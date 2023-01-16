@@ -23,6 +23,10 @@
 #ifndef SOPHUS_HPP
 #define SOPHUS_HPP
 
+
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 #include <stdexcept>
 
 // fix log1p not being found on Android in Eigen

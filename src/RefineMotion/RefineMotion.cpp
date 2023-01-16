@@ -1,3 +1,5 @@
+#define _USE_MATH_DEFINES
+#include <cmath>
 #include <stdio.h>
 #include <string>
 #include <iostream>
@@ -6,7 +8,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/core/version.hpp>
-#include <cmath>
+
 #include <Eigen/Dense>
 
 #include "CoarseInitializer.h"
@@ -23,13 +25,13 @@ using namespace Eigen;
 namespace SFRSS
 {
 
-int BuildInitialPoints3(uint16_t * disparity, Pnt** points_out, int * points_num, int lvl) 
+int BuildInitialPoints3(uint16_t * disparity, Pnt** points_out, int * points_num, int lvl)
 {
     Pnt* local_points;
     // bool IsSkip = false;
-    
+
     local_points = points_out[lvl];
-    
+
     int sucess = 0;
     double curbfx = fxG[lvl] * baselineG * baselineScaleG;
     for(int ii = 0; ii < points_num[lvl]; ++ii)
@@ -43,7 +45,7 @@ int BuildInitialPoints3(uint16_t * disparity, Pnt** points_out, int * points_num
         if (disparity[iid] == invalidDispG){
             local_points[ii].isGood = false;
             continue;
-        }    
+        }
 
         float disp = disparity[iid];
         disp = disp / subPixelLevlG + 1;
@@ -142,11 +144,14 @@ void RefineMotion::InitRefineMotion(FramePym * ptrLeft, FramePym * ptrRight){
 vector<double> RefineMotion::Refine2(uint16_t * disparity, vector<double> motionState, int pyramidLvl, bool FixTranslation){
 
     // BuildInitialPoints3 for disparity map with 4 slots
+    cout << "BuildInitialPoints3 depth" << endl;
     BuildInitialPoints3(disparity, mpCoarseInitializer->points, mpCoarseInitializer->numPoints, pyramidLvl);
 
     // Transfer depth from world coordinate to local coordinate
+    cout << "Transfer depth" << endl;
     TransferDepth(mpCoarseInitializer->points, mpCoarseInitializer->numPoints, pyramidLvl, motionState, RowTimeG);
 
+    cout << "Optimize3_withdepths_MT" << endl;
     vector<double> finalState = mpCoarseInitializer->Optimize3_withdepths_MT(motionState, pyramidLvl, FixTranslation); // _MT
 
     return finalState;

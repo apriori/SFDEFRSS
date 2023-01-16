@@ -19,14 +19,19 @@ SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} ${CUDA_ARCH}")
 
 file(GLOB STEREOSRCS "*.cu" "*.cpp")
 
+
+
 if(LIBSGM_SHARED)
+	message("SGM shared")
 	CUDA_ADD_LIBRARY(sgm stereo_sgm.cpp ${STEREOSRCS} SHARED)
-	target_link_libraries(sgm ${CUDA_LIBRARIES})
-	if(BUILD_OPENCV_WRAPPER)
-		target_link_libraries(sgm ${OpenCV_LIBS})
-	endif()
+	target_link_libraries(sgm ${CUDA_LIBRARIES} opencv_world)
+	# if(BUILD_OPENCV_WRAPPER)
+	# 	target_link_libraries(sgm opencv_world)
+	# endif()
 else()
+	message("SGM static")
 	CUDA_ADD_LIBRARY(sgm stereo_sgm.cpp ${STEREOSRCS} STATIC)
+	target_link_libraries(sgm ${OpenCV_LIBS})
 endif()
 
 install(

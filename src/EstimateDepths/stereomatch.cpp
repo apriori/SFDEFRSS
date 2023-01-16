@@ -1,5 +1,9 @@
-#include <opencv2/opencv.hpp>
-#include <Eigen/Geometry> 
+// #include <opencv2/opencv.hpp>
+#define _USE_MATH_DEFINES
+#include <cmath>
+
+
+#include <Eigen/Geometry>
 #include "./include/stereomatch.h"
 #include "./include/libsgm.h"
 #include "../util/globalCalib.h"
@@ -138,6 +142,10 @@ int CensusTransformCircle(uint32_t * dest, T * img, int img_h, int img_w, int ra
 	int half_kw = radius / 2;
 	int half_kh = radius / 2;
 	uint32_t f = 0;
+
+	// std::cout << "Image width: " << img_w << std::endl;
+	// std::cout << "Image height: " << img_h << std::endl;
+
 	for(int y = half_kh; y < img_h - half_kh; ++y){
 		for(int x = half_kw; x < img_w - half_kw; ++x){
 			f = 0;
@@ -149,8 +157,20 @@ int CensusTransformCircle(uint32_t * dest, T * img, int img_h, int img_w, int ra
 				const int smem_y2 = y + circle_pattern[kk][2];
 				const int smem_x1 = x + circle_pattern[kk][1];
 				const int smem_x2 = x + circle_pattern[kk][3];
-				unsigned char a = img[smem_y1*img_w + smem_x1];
-				unsigned char b = img[smem_y2*img_w + smem_x2];
+				// unsigned char a = img[smem_y1*img_w + smem_x1];
+				// unsigned char b = img[smem_y2*img_w + smem_x2];
+				// f = (f << 1) | (a > b);
+
+				const int index1 = smem_y1*img_w + smem_x1;
+				const int index2 = smem_y2*img_w + smem_x2;
+
+				if (index1 < 0 || index2 < 0) {
+					f = (f << 1);
+					continue;
+				}
+
+				unsigned char a = img[index1];
+				unsigned char b = img[index2];
 				f = (f << 1) | (a > b);
 			}
 			dest[y*img_w + x] = f;
@@ -202,16 +222,16 @@ StereoMatch::StereoMatch(System* pSys, std::string strSettingPath): mpSystem(pSy
 			int curvi = int(((curv + 0.5) * localScale) - 0.5 + 0.5);
 			int curui = int(((curu + 0.5) * localScale) - 0.5 + 0.5);
 			int iid = curvi*wG[0] + curui;
-			if (!(ptrLeftRemapXG[iid] > 0 && 
-				ptrLeftRemapXG[iid]< rawColsG - 1 && 
-				ptrLeftRemapYG[iid]> 0 && 
+			if (!(ptrLeftRemapXG[iid] > 0 &&
+				ptrLeftRemapXG[iid]< rawColsG - 1 &&
+				ptrLeftRemapYG[iid]> 0 &&
 				ptrLeftRemapYG[iid] < rawRowsG-1)){
 				mDisparityMask[lvl][ii] = 0;
 			}
 
-			if (!(ptrRightRemapXG[iid] > 0 && 
-				ptrRightRemapXG[iid] < rawColsG - 1 && 
-				ptrRightRemapYG[iid] > 0 && 
+			if (!(ptrRightRemapXG[iid] > 0 &&
+				ptrRightRemapXG[iid] < rawColsG - 1 &&
+				ptrRightRemapYG[iid] > 0 &&
 				ptrRightRemapYG[iid] < rawRowsG-1)){
 				Right2LeftMask[lvl][ii] = 0;
 			}
@@ -294,34 +314,53 @@ StereoMatch::~StereoMatch(){
 
 int CensusTransformCircle_Test(uint32_t * dest, uint8_t * img, int img_h, int img_w, int radius){
 
+	// std::cout << "CensusTransformCircle_Test" << std::endl;
+
 	int half_kw = radius / 2;
 	int half_kh = radius / 2;
 	uint32_t f = 0;
 	uint32_t invalid = 1 << 31;
+
+	// std::cout << "Image width: " << img_w << std::endl;
+	// std::cout << "Image height: " << img_h << std::endl;
+
+
 	for(int y = half_kh; y < img_h - half_kh; ++y){
 		for(int x = half_kw; x < img_w - half_kw; ++x){
 			f = 0;
+
 			if (mptrdispscale[y*img_w + x] == 0){ // mask  = Null, in final mode
 				continue;
 			}
+
 			if (img[(y - half_kh)*img_w + x] == 0 ||
 				img[(y + half_kh)*img_w + x] == 0 ||
 				img[y*img_w + x + half_kw] == 0 ||
 				img[y*img_w + x - half_kw] == 0){
 				dest[y*img_w + x] = invalid;
+				continue;
 			}
 			for(int kk = 0; kk < PATTERN_SIZE; ++kk){
 				const int smem_y1 = y + circle_pattern[kk][0];
 				const int smem_y2 = y + circle_pattern[kk][2];
 				const int smem_x1 = x + circle_pattern[kk][1];
 				const int smem_x2 = x + circle_pattern[kk][3];
-				unsigned char a = img[smem_y1*img_w + smem_x1];
-				unsigned char b = img[smem_y2*img_w + smem_x2];
+				const int index1 = smem_y1*img_w + smem_x1;
+				const int index2 = smem_y2*img_w + smem_x2;
+
+				if (index1 < 0 || index2 < 0) {
+					f = (f << 1);
+					continue;
+				}
+
+				unsigned char a = img[index1];
+				unsigned char b = img[index2];
 				f = (f << 1) | (a > b);
 			}
 			dest[y*img_w + x] = f;
 		}
 	}
+	// std::cout << "CensusTransformCircle_Test done" << std::endl;
 
 	return 0;
 }
@@ -341,7 +380,7 @@ void CalcRightDisparity2_new(int start, int end, uint16_t * aggregationCost, uin
 		}
 
 		uint16_t localcost[1024] = {0};
-		int min = 1e8; 
+		int min = 1e8;
 		int index = -1;
 		for (int id = 0; id < maxDisparityG[lvl]; ++id){
 			float uu = ptrResCoordinateR2L[(id*wG[lvl]*hG[lvl] + v*wG[lvl] + u)*2];
@@ -362,7 +401,7 @@ void CalcRightDisparity2_new(int start, int end, uint16_t * aggregationCost, uin
 		}
 		else{
 			ptrRightDisparity[v*wG[lvl] + u] = invalid;
-		}	
+		}
 	}
 
 }
@@ -379,7 +418,7 @@ void WinnerTakeAll_new2(int start, int end, uint8_t * ptrFinalCost, int channels
 	for (int tid = start; tid < end; ++tid){
 		int v = tid / width;
 		int u = tid % width;
-		int min = 1e8; 
+		int min = 1e8;
 		int index = -1;
 		for (int id = 0; id < maxDisparityG[lvl]; ++id){
 			int sum = 0;
@@ -416,7 +455,7 @@ void WinnerTakeAll_new2(int start, int end, uint8_t * ptrFinalCost, int channels
 				const int right = localcost[index + 1];
 				const int numer = left - right;
 				const int denom = left - 2 * min + right;
-				*(ptr_result2 + v*width + u) = index*subPixelLvl + ((numer << sgm::StereoSGM::SUBPIXEL_SHIFT) + denom) / (2 * denom);				
+				*(ptr_result2 + v*width + u) = index*subPixelLvl + ((numer << sgm::StereoSGM::SUBPIXEL_SHIFT) + denom) / (2 * denom);
 			}
 			else{
 				*(ptr_result2 + v*width + u) = index*subPixelLvl;
@@ -471,7 +510,7 @@ double StereoMatch::StereoMatchFinalMode4(int lvl, void * ptr_result, bool IsInt
         printf("ptr_sgm error!\n");
         return 0;
     }
-	
+
 	int localw = wG[lvl];
 	int localh = hG[lvl];
 
@@ -508,7 +547,7 @@ double StereoMatch::StereoMatchFinalMode4(int lvl, void * ptr_result, bool IsInt
     else{
         WinnerTakeAll_new2(0, taskCnt, mptrFinalCost, 8, (uint16_t *)ptr_result, mptrAggregationCost, subPixelLevlG, 0.95, m_invalid_disp, lvl);
     }
-	
+
 	multiThread = true;
     threadCnt = THREAD_CNT;
     taskCnt = localw*localh;
@@ -546,7 +585,7 @@ double StereoMatch::StereoMatchFinalMode4(int lvl, void * ptr_result, bool IsInt
 
 	for (int v = 0; v < localh; ++v){
 		for (int u = 0; u < localw; ++u){
-			if (mptrdispscale[v*localw + u] == 0){ 
+			if (mptrdispscale[v*localw + u] == 0){
 				((uint16_t *)ptr_result)[v * localw + u] = m_invalid_disp;
 			}
 			if (Right2LeftMask[lvl][v*localw + u] == 0){
@@ -589,7 +628,7 @@ double StereoMatch::StereoMatchFinalMode4(int lvl, void * ptr_result, bool IsInt
 	if (!IsInterpolate){
 		for (int v = 0; v < localh; ++v){
 			for (int u = 0; u < localw; ++u){
-				if (mptrdispscale[v*localw + u] == 0){ 
+				if (mptrdispscale[v*localw + u] == 0){
 					((uint16_t *)ptr_result)[v * localw + u] = m_invalid_disp;
 				}
 				else{
@@ -609,7 +648,7 @@ double StereoMatch::StereoMatchFinalMode4(int lvl, void * ptr_result, bool IsInt
 		if (subPixelLevlG > 0) offset = 4;
 		for (int v = 0; v < localh; ++v){
 			for (int u = 0; u < localw; ++u){
-				if (mptrdispscale[v*localw + u] == 0){ 
+				if (mptrdispscale[v*localw + u] == 0){
 					((uint16_t *)ptr_result)[v * localw + u] = m_invalid_disp;
 				}
 				else{
@@ -693,7 +732,7 @@ int StereoMatch::InitStereoMatch(int diparity_size, int input_depth, int output_
     if (ptr_sgm) delete ptr_sgm;
     ptr_sgm = new sgm::StereoSGM(wG[0], hG[0], m_disparity_size, input_depth, output_depth, sgm::EXECUTE_INOUT_CUDA2CUDA, 0, IsSubPixel);
     if (!ptr_sgm) printf("create sgm Object failed!\n");
-    
+
     m_invalid_disp = output_depth == 8
                     ? static_cast< uint8_t>(ptr_sgm->get_invalid_disparity())
                     : static_cast<uint16_t>(ptr_sgm->get_invalid_disparity());
@@ -722,7 +761,7 @@ int StereoMatch::InitStereoMatch(int diparity_size, int input_depth, int output_
 		if (ptrLeftCensus[lvl] == NULL || ptrRightCensus[lvl] == NULL){
 			printf("CPU malloc error!\n");
 			return -1;
-		}	
+		}
 		memset(ptrLeftCensus[lvl], 0, sizeof(unsigned int)*wG[lvl]*hG[lvl]);
 		memset(ptrRightCensus[lvl], 0, sizeof(unsigned int)*wG[lvl]*hG[lvl]*4);
 	}
@@ -751,7 +790,7 @@ int StereoMatch::InitStereoMatch(int diparity_size, int input_depth, int output_
 
 void StereoMatch::ShowDisparity(void * ptr_disparity, std::string win_name, int lvl, bool flip){
 
-	cv::Mat_<uint16_t> disparity(hG[lvl], wG[lvl]); 
+	cv::Mat_<uint16_t> disparity(hG[lvl], wG[lvl]);
 	cv::Mat disparity_8u,disparity_color;
 
 	memcpy(disparity.data, ptr_disparity, wG[lvl]*hG[lvl]*sizeof(uint16_t)); // uint16_t
@@ -776,7 +815,7 @@ void StereoMatch::ShowDisparity(void * ptr_disparity, std::string win_name, int 
 void StereoMatch::SetShowMaxDisparity(int max){
 	if (max > 0){
 		ShowMaxDisparity = max;
-	}	
+	}
 }
 
 
@@ -892,7 +931,7 @@ int RSProjectionSubset2RTGrid2(Vec3 Angular, Vec3 Velocity, int start, int end, 
 		// 	continue;
 		// }
 
-		// double UVDist = 1; // sqrtf((DistKv - LastKv)*(DistKv - LastKv) + (DistKu - LastKu)*(DistKu - LastKu)); // 1; // 
+		// double UVDist = 1; // sqrtf((DistKv - LastKv)*(DistKv - LastKv) + (DistKu - LastKu)*(DistKu - LastKu)); // 1; //
 		// double AveBase = baseLine0 + baseLine1;
 
 		// double TargetDisparity = 256;
@@ -949,14 +988,14 @@ int RSProjectionSubset2RTGrid2(Vec3 Angular, Vec3 Velocity, int start, int end, 
 			int tryTimes = 0;
 
 			while(tryTimes < MaxTryTimes){
-				Ridd = RLRG * Eigen::AngleAxisd(AngSpeed*guessRightRow, AngAxis).matrix();				
+				Ridd = RLRG * Eigen::AngleAxisd(AngSpeed*guessRightRow, AngAxis).matrix();
 				tidd = TLRG + guessRightRow * RLRG * Velocity;
 
 				curRightPoint = Ridd * curLeftPoint + tidd;
 
 				// Just by a rotation!!
 				u = curRightPoint[0] / curRightPoint[2];
-				v = curRightPoint[1] / curRightPoint[2];            
+				v = curRightPoint[1] / curRightPoint[2];
 				Ku = fxG[lvl] * u + cxG[lvl];
 				Kv = fyG[lvl] * v + cyG[lvl];
 				newiDepth = curRightPoint[2];
@@ -968,7 +1007,7 @@ int RSProjectionSubset2RTGrid2(Vec3 Angular, Vec3 Velocity, int start, int end, 
 					break;
 				}
 
-				// Interpolate 
+				// Interpolate
 				rightRow = getInterpolatedElement(ptrRightRemapYG, (Ku+0.5)*pyrScale-0.5, (Kv+0.5)*pyrScale-0.5, wG[0]);
 				if (fabs(rightRow - guessRightRow) < Threshold){
 
@@ -1071,9 +1110,9 @@ int InterpolateProj2(int start, int end, int lvl){
 				if (xx == xstart && yy == ystart) continue;
 				mptrdispscale[yy*wG[lvl] + xx] = scale;
 				if (scale > 0){
-					mptrBaselineAve[yy*wG[lvl] + xx] = ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * r0 + 
-												     ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * r1 + 
-												     ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * r2 + 
+					mptrBaselineAve[yy*wG[lvl] + xx] = ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * r0 +
+												     ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * r1 +
+												     ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * r2 +
 												     ptrInterpolateCoeffsBR[lvl][yy*wG[lvl] + xx] * r3;
 
 				}
@@ -1083,7 +1122,7 @@ int InterpolateProj2(int start, int end, int lvl){
 			}
 		}
 
-		if (!mDisparityMask[lvl][ystart*wG[lvl] + xstart] || 
+		if (!mDisparityMask[lvl][ystart*wG[lvl] + xstart] ||
 		    !mDisparityMask[lvl][ystart*wG[lvl] + xend] ||
 			!mDisparityMask[lvl][yend*wG[lvl] + xstart] ||
 			!mDisparityMask[lvl][yend*wG[lvl] + xend]){
@@ -1159,34 +1198,34 @@ int InterpolateProj2(int start, int end, int lvl){
 			for (int yy = ystart; yy < yend; ++yy){
 				for (int xx = xstart; xx < xend; ++xx){
 					int storeOffset = (yy*wG[lvl] + xx)*maxDisparityG[lvl] + dis;
-					ptrResCoordinate[2*storeOffset] = ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * u0 + 
-												  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * u1 + 
-												  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * u2 + 
+					ptrResCoordinate[2*storeOffset] = ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * u0 +
+												  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * u1 +
+												  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * u2 +
 												  ptrInterpolateCoeffsBR[lvl][yy*wG[lvl] + xx] * u3;
 
-					ptrResCoordinate[2*storeOffset + 1] = ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * v0 + 
-													  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * v1 + 
-													  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * v2 + 
+					ptrResCoordinate[2*storeOffset + 1] = ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * v0 +
+													  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * v1 +
+													  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * v2 +
 													  ptrInterpolateCoeffsBR[lvl][yy*wG[lvl] + xx] * v3;
 
-					ptrResOffset[4*storeOffset] = (char)(ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * o00 + 
-												  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * o01 + 
-												  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * o02 + 
+					ptrResOffset[4*storeOffset] = (char)(ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * o00 +
+												  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * o01 +
+												  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * o02 +
 												  ptrInterpolateCoeffsBR[lvl][yy*wG[lvl] + xx] * o03);
 
-					ptrResOffset[4*storeOffset + 1] = (char)(ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * o10 + 
-													  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * o11 + 
-													  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * o12 + 
+					ptrResOffset[4*storeOffset + 1] = (char)(ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * o10 +
+													  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * o11 +
+													  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * o12 +
 													  ptrInterpolateCoeffsBR[lvl][yy*wG[lvl] + xx] * o13);
 
-					ptrResOffset[4*storeOffset + 2] = (char)(ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * o20 + 
-												  	  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * o21 + 
-												  	  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * o22 + 
+					ptrResOffset[4*storeOffset + 2] = (char)(ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * o20 +
+												  	  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * o21 +
+												  	  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * o22 +
 												  	  ptrInterpolateCoeffsBR[lvl][yy*wG[lvl] + xx] * o23);
 
-					ptrResOffset[4*storeOffset + 3] = (char)(ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * o30 + 
-													  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * o31 + 
-													  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * o32 + 
+					ptrResOffset[4*storeOffset + 3] = (char)(ptrInterpolateCoeffsTL[lvl][yy*wG[lvl] + xx] * o30 +
+													  ptrInterpolateCoeffsTR[lvl][yy*wG[lvl] + xx] * o31 +
+													  ptrInterpolateCoeffsBL[lvl][yy*wG[lvl] + xx] * o32 +
 													  ptrInterpolateCoeffsBR[lvl][yy*wG[lvl] + xx] * o33);
 				}
 			}
@@ -1307,7 +1346,7 @@ int InterpolateProjR2L(int start, int end, int lvl){
 				begin = end;
 			}
 		}
-				
+
 
 	}
 
@@ -1503,7 +1542,7 @@ int StereoMatch::InitRSProjection(int GridSize, int Border){
 		mBorder[lvl] = Border;
 		if (mBorder[lvl] > 0 || mGridSize[lvl] > 0){
 			if ((hG[lvl] - 2*mBorder[lvl]) % mGridSize[lvl] == 0){
-				mAnchorHeight[lvl] = (hG[lvl] - 2*mBorder[lvl]) / mGridSize[lvl] + 1;	
+				mAnchorHeight[lvl] = (hG[lvl] - 2*mBorder[lvl]) / mGridSize[lvl] + 1;
 			}
 			else{
 				mAnchorHeight[lvl] = ((hG[lvl] - 2*mBorder[lvl]) / mGridSize[lvl]) + 2;
@@ -1611,7 +1650,7 @@ int StereoMatch::InitRSProjection(int GridSize, int Border){
 			ptr[1] = ii / wG[lvl];
 			ptr[2] = 1.0;
 		}
-		
+
 		coordi = coordi.t();
 		cv::Mat rightCoordi = cvRLRG * cvKiG[lvl] * coordi;
 		cv::Mat leftCoordi = cvRLRG.inv() * cvKiG[lvl] * coordi;
@@ -1738,7 +1777,9 @@ int RenderMT(int start, int end, int lvl, uint8_t * ptrSrc, unsigned int * ptrBu
 int CensusMT(int start, int end, int lvl, uint8_t * ptrMidBuffer, uint8_t * ptrDest){
 	for (int iid = start; iid < end; ++iid){
 		uint8_t * curDest = ptrDest + iid*wG[lvl]*hG[lvl]*4;
+		// std::cout << "CensusMT memcpy" << std::endl;
 		memcpy(ptrMidBuffer, curDest, wG[lvl]*hG[lvl]);
+		// std::cout << "CensusMT memcpy done" << std::endl;
 		CensusTransformCircle_Test((uint32_t *)curDest, ptrMidBuffer, hG[lvl], wG[lvl], 4);
 	}
 
@@ -1765,7 +1806,7 @@ int BuildMT(int start, int end, uint32_t * dest, uint32_t * left, uint32_t * rig
 		}
 		int destRowindex = row*width*DisparityNum;
 		int destColindex = col*DisparityNum;
-		
+
 		uint32_t leftvalue = left[pixelIndex];
 
 		// printf("%d %d %d\n", row, col, scale);
@@ -1790,6 +1831,7 @@ int StereoMatch::RSProjection3(std::vector<double> motionState, int lvl){
 	Vec3 Velocity(motionState[3] * RowTimeG, motionState[4] * RowTimeG, motionState[5] * RowTimeG);
 	Vec3 Angular(motionState[0] * RowTimeG, motionState[1] * RowTimeG, motionState[2] * RowTimeG);
 
+	// std::cout << "Memcpy shit" << std::endl;
 	// Reset buffer to zeros
 	memcpy(ptrResCoordinate, ptrCoordiBlocks, sizeof(float)*maxDisparityG[lvl]*2*wG[lvl]*hG[lvl]);
 	memcpy(ptrResCoordinateR2L, ptrCoordiBlocks, sizeof(float)*maxDisparityG[lvl]*2*wG[lvl]*hG[lvl]);
@@ -1825,6 +1867,8 @@ int StereoMatch::RSProjection3(std::vector<double> motionState, int lvl){
         RSProjectionSubset2RTGrid2(Angular, Velocity, 0, taskCnt, debugInfo, lvl);
     }
 
+	// std::cout << "RSProjectionSubset2RTGrid2 done" << std::endl;
+
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
     double ttrack0 = std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
 
@@ -1854,6 +1898,7 @@ int StereoMatch::RSProjection3(std::vector<double> motionState, int lvl){
 			InterpolateProj2(0, taskCnt, lvl);
 		}
 	}
+	std::cout << "InterpolateProj2 done" << std::endl;
 
 	bool IsShowRenderResult = true;
 	if (IsShowRenderResult){
@@ -1881,6 +1926,7 @@ int StereoMatch::RSProjection3(std::vector<double> motionState, int lvl){
 			RenderMT(0, taskCnt, lvl, mrightFrame->grayPyr[lvl], ptrCostVolumes);
 		}
 	}
+	std::cout << "RenderMT done" << std::endl;
 
 	// Feature extraction
 	bool IsTransferCensus = true;
@@ -1909,6 +1955,8 @@ int StereoMatch::RSProjection3(std::vector<double> motionState, int lvl){
 			CensusMT(0, taskCnt, lvl, ptrFinalCost + 0*wG[lvl]*hG[lvl], (uint8_t *)ptrCostVolumes);
 		}
 	}
+
+	// std::cout << "CensusMT done" << std::endl;
 
 
 	// Build Cost Volumes
@@ -1941,6 +1989,7 @@ int StereoMatch::RSProjection3(std::vector<double> motionState, int lvl){
 			BuildMT(0, taskCnt, ptrCostVolumes2, ptrLeftCensus[lvl], ptrCostVolumes, m_pattern_size, lvl);
 		}
 	}
+	std::cout << "BuildMT done" << std::endl;
 
 	// Interpolate thr projection from R to L
 	if (mGridSize[lvl] != 1){ // require interpolate
@@ -1968,6 +2017,7 @@ int StereoMatch::RSProjection3(std::vector<double> motionState, int lvl){
 			InterpolateProjR2L(0, taskCnt, lvl);
 		}
 	}
+	std::cout << "InterpolateProjR2L done" << std::endl;
 
 	bool IsShowPatchSizeChange = false;
 	if (IsShowPatchSizeChange && lvl == 0){
@@ -1983,28 +2033,28 @@ int StereoMatch::RSProjection3(std::vector<double> motionState, int lvl){
 					int baseIndexL = (vv*wG[lvl]*maxDisparityG[lvl] + (uu-step)*maxDisparityG[lvl] + ii)*2;
 					int baseIndexU = ((vv-step)*wG[lvl]*maxDisparityG[lvl] + uu*maxDisparityG[lvl] + ii)*2;
 					int baseIndexB = ((vv+step)*wG[lvl]*maxDisparityG[lvl] + uu*maxDisparityG[lvl] + ii)*2;
-					if (ptrResCoordinate[baseIndex00] > 0 && 
+					if (ptrResCoordinate[baseIndex00] > 0 &&
 						ptrResCoordinate[baseIndexR] > 0 &&
 						ptrResCoordinate[baseIndexL] > 0 &&
 						ptrResCoordinate[baseIndexU] > 0 &&
 						ptrResCoordinate[baseIndexB] > 0){
 
 						float SumDistance = 0;
-						SumDistance += sqrtf((ptrResCoordinate[baseIndexR] - ptrResCoordinate[baseIndex00]) * 
-										(ptrResCoordinate[baseIndexR] - ptrResCoordinate[baseIndex00]) + 
-									(ptrResCoordinate[baseIndexR + 1] - ptrResCoordinate[baseIndex00 + 1]) * 
+						SumDistance += sqrtf((ptrResCoordinate[baseIndexR] - ptrResCoordinate[baseIndex00]) *
+										(ptrResCoordinate[baseIndexR] - ptrResCoordinate[baseIndex00]) +
+									(ptrResCoordinate[baseIndexR + 1] - ptrResCoordinate[baseIndex00 + 1]) *
 										(ptrResCoordinate[baseIndexR + 1] - ptrResCoordinate[baseIndex00 + 1]));
-						SumDistance += sqrtf((ptrResCoordinate[baseIndexL] - ptrResCoordinate[baseIndex00]) * 
-										(ptrResCoordinate[baseIndexL] - ptrResCoordinate[baseIndex00]) + 
-									(ptrResCoordinate[baseIndexL + 1] - ptrResCoordinate[baseIndex00 + 1]) * 
+						SumDistance += sqrtf((ptrResCoordinate[baseIndexL] - ptrResCoordinate[baseIndex00]) *
+										(ptrResCoordinate[baseIndexL] - ptrResCoordinate[baseIndex00]) +
+									(ptrResCoordinate[baseIndexL + 1] - ptrResCoordinate[baseIndex00 + 1]) *
 										(ptrResCoordinate[baseIndexL + 1] - ptrResCoordinate[baseIndex00 + 1]));
-						SumDistance += sqrtf((ptrResCoordinate[baseIndexU] - ptrResCoordinate[baseIndex00]) * 
-										(ptrResCoordinate[baseIndexU] - ptrResCoordinate[baseIndex00]) + 
-									(ptrResCoordinate[baseIndexU + 1] - ptrResCoordinate[baseIndex00 + 1]) * 
+						SumDistance += sqrtf((ptrResCoordinate[baseIndexU] - ptrResCoordinate[baseIndex00]) *
+										(ptrResCoordinate[baseIndexU] - ptrResCoordinate[baseIndex00]) +
+									(ptrResCoordinate[baseIndexU + 1] - ptrResCoordinate[baseIndex00 + 1]) *
 										(ptrResCoordinate[baseIndexU + 1] - ptrResCoordinate[baseIndex00 + 1]));
-						SumDistance += sqrtf((ptrResCoordinate[baseIndexB] - ptrResCoordinate[baseIndex00]) * 
-										(ptrResCoordinate[baseIndexB] - ptrResCoordinate[baseIndex00]) + 
-									(ptrResCoordinate[baseIndexB + 1] - ptrResCoordinate[baseIndex00 + 1]) * 
+						SumDistance += sqrtf((ptrResCoordinate[baseIndexB] - ptrResCoordinate[baseIndex00]) *
+										(ptrResCoordinate[baseIndexB] - ptrResCoordinate[baseIndex00]) +
+									(ptrResCoordinate[baseIndexB + 1] - ptrResCoordinate[baseIndex00 + 1]) *
 										(ptrResCoordinate[baseIndexB + 1] - ptrResCoordinate[baseIndex00 + 1]));
 						double targetValue = fabs(SumDistance - 4.0 * step) * 255;
 						if (targetValue < 0) targetValue = 0;

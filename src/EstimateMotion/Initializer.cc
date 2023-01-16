@@ -1,3 +1,5 @@
+#define _USE_MATH_DEFINES
+#include <cmath>
 
 #include "Initializer.h"
 #include "ORBmatcher.h"
@@ -5,6 +7,9 @@
 #include "MinimalSolver.h"
 #include "../util/DUtils/Random.h"
 #include "../util/globalCalib.h"
+
+#include <opencv2/core/types_c.h>
+#include <opencv2/calib3d/calib3d.hpp>
 
 namespace SFRSS
 {
@@ -38,11 +43,11 @@ int Initializer::SetUndistImagePair(cv::Mat &leftImg, cv::Mat &rightImg)
 bool Initializer::Initialize(Frame &CurrentFrame, const vector<int> &vMatches12, cv::Mat &R21, cv::Mat &t21,
                              vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, cv::Mat &R, cv::Mat &T, cv::Mat img0, cv::Mat img1)
 {
-    mvKeys2 = CurrentFrame.mvKeys;         
-    mvKeys2Norm = CurrentFrame.mvKeysNorm; 
+    mvKeys2 = CurrentFrame.mvKeys;
+    mvKeys2Norm = CurrentFrame.mvKeysNorm;
     mvKeys2Un = CurrentFrame.mvKeysUn;
     mK2 = CurrentFrame.mK;
-    
+
     mR = R.clone();
     mT = T.clone();
 
@@ -152,86 +157,100 @@ bool Initializer::Initialize(Frame &CurrentFrame, const vector<int> &vMatches12,
     return true;
 }
 
-void ComposeRT(const CvMat *_wvec, const CvMat *_vvec, // rotation and velocity
-               const CvMat *_rvec, const CvMat *_tvec,
+void ComposeRT(cv::Mat _wvec, cv::Mat _vvec, // rotation and velocity
+               cv::Mat _rvec, cv::Mat _tvec,
                double leftrow, double rightrow,
-               CvMat *_rvec3, CvMat *_tvec3,
-               CvMat *dr3dw, CvMat *dr3dv,
-               CvMat *dt3dw, CvMat *dt3dv)
+               cv::Mat _rvec3, cv::Mat _tvec3,
+               cv::Mat dr3dw, cv::Mat dr3dv,
+               cv::Mat dt3dw, cv::Mat dt3dv)
 {
     double _r[3], _w[3];
     double _R1[9], _d1[9 * 3], _R2[9], _d2[9 * 3];
-    CvMat r = cvMat(3, 1, CV_64F, _r), w = cvMat(3, 1, CV_64F, _w);
-    CvMat R1 = cvMat(3, 3, CV_64F, _R1), R2 = cvMat(3, 3, CV_64F, _R2);
-    CvMat dR1dr1 = cvMat(9, 3, CV_64F, _d1), dR2dr2 = cvMat(9, 3, CV_64F, _d2);
+    cv::Mat r = cv::Mat(3, 1, CV_64F, _r), w = cv::Mat(3, 1, CV_64F, _w);
+    cv::Mat R1 = cv::Mat(3, 3, CV_64F, _R1), R2 = cv::Mat(3, 3, CV_64F, _R2);
+    cv::Mat dR1dr1 = cv::Mat(9, 3, CV_64F, _d1), dR2dr2 = cv::Mat(9, 3, CV_64F, _d2);
 
-    CV_Assert(_rvec->rows == 3 && _rvec->cols == 1 && CV_ARE_SIZES_EQ(_rvec, _wvec));
+    CV_Assert(_rvec.rows == 3 && _rvec.cols == 1 && _rvec.size() == _wvec.size());
 
-    cvConvert(_rvec, &r);
-    cvConvert(_wvec, &w); // w * (rightrow - leftrow)
+    // cvConvert(_rvec, &r);
+    _rvec.assignTo(r);
+    // cvConvert(_wvec, &w); // w * (rightrow - leftrow)
+    _wvec.assignTo(w);
     _w[0] = _w[0] * (rightrow - leftrow);
     _w[1] = _w[1] * (rightrow - leftrow);
     _w[2] = _w[2] * (rightrow - leftrow);
 
-    cvRodrigues2(&w, &R1, &dR1dr1);
-    cvRodrigues2(&r, &R2, &dR2dr2);
+    // cvRodrigues2(&w, &R1, &dR1dr1);
+    cv::Rodrigues(w, R1, dR1dr1);
+    // cvRodrigues2(&r, &R2, &dR2dr2);
+    cv::Rodrigues(r, R2, dR2dr2);
 
     double _r3[3], _R3[9], _dR3dR1[9 * 9], _dR3dR2[9 * 9], _dr3dR3[9 * 3];
     double _W1[9 * 3], _W2[3 * 3];
-    CvMat r3 = cvMat(3, 1, CV_64F, _r3), R3 = cvMat(3, 3, CV_64F, _R3);
-    CvMat dR3dR1 = cvMat(9, 9, CV_64F, _dR3dR1), dR3dR2 = cvMat(9, 9, CV_64F, _dR3dR2);
-    CvMat dr3dR3 = cvMat(3, 9, CV_64F, _dr3dR3);
-    CvMat W1 = cvMat(3, 9, CV_64F, _W1), W2 = cvMat(3, 3, CV_64F, _W2);
+    cv::Mat r3 = cv::Mat(3, 1, CV_64F, _r3), R3 = cv::Mat(3, 3, CV_64F, _R3);
+    cv::Mat dR3dR1 = cv::Mat(9, 9, CV_64F, _dR3dR1), dR3dR2 = cv::Mat(9, 9, CV_64F, _dR3dR2);
+    cv::Mat dr3dR3 = cv::Mat(3, 9, CV_64F, _dr3dR3);
+    cv::Mat W1 = cv::Mat(3, 9, CV_64F, _W1), W2 = cv::Mat(3, 3, CV_64F, _W2);
 
-    cvMatMul(&R2, &R1, &R3);
+    // cvMatMul(&R2, &R1, &R3);
+    R3 = R2 * R1;
     // Deriv
-    cvCalcMatMulDeriv(&R2, &R1, &dR3dR2, &dR3dR1);
+    // cvCalcMatMulDeriv(&R2, &R1, &dR3dR2, &dR3dR1);
+    cv::matMulDeriv(R2, R1, dR3dR2, dR3dR1);
     // derivative, SO3->so3
-    cvRodrigues2(&R3, &r3, &dr3dR3);
+    // cvRodrigues2(&R3, &r3, &dr3dR3);
+    cv::Rodrigues(R3, r3, dr3dR3);
 
     // _rvec3: an output variable
-    if (_rvec3)
-        cvConvert(&r3, _rvec3);
+        // cvConvert(&r3, _rvec3);
+        r3.assignTo(_rvec3);
 
-    if (dr3dw)
+
+    // if (!dr3dw.empty())
     {
-        cvMatMul(&dr3dR3, &dR3dR1, &W1);
-        cvMatMul(&W1, &dR1dr1, &W2);
-        cvConvert(&W2, dr3dw);
+        // cvMatMul(&dr3dR3, &dR3dR1, &W1);
+        W1 = dr3dR3 * dR3dR1;
+        // cvMatMul(&W1, &dR1dr1, &W2);
+        W2 = W1 * dR1dr1;
+        // cvConvert(&W2, dr3dw);
+        W2.assignTo(dr3dw);
 
-        double *ptrdata = dr3dw->data.db;
-        ptrdata[0] = ptrdata[0] * (rightrow - leftrow);
-        ptrdata[1] = ptrdata[1] * (rightrow - leftrow);
-        ptrdata[2] = ptrdata[2] * (rightrow - leftrow);
-        ptrdata[3] = ptrdata[3] * (rightrow - leftrow);
-        ptrdata[4] = ptrdata[4] * (rightrow - leftrow);
-        ptrdata[5] = ptrdata[5] * (rightrow - leftrow);
-        ptrdata[6] = ptrdata[6] * (rightrow - leftrow);
-        ptrdata[7] = ptrdata[7] * (rightrow - leftrow);
-        ptrdata[8] = ptrdata[8] * (rightrow - leftrow);
+        dr3dw.at<double>(0) *= (rightrow - leftrow);
+        dr3dw.at<double>(1) *= (rightrow - leftrow);
+        dr3dw.at<double>(2) *= (rightrow - leftrow);
+        dr3dw.at<double>(3) *= (rightrow - leftrow);
+        dr3dw.at<double>(4) *= (rightrow - leftrow);
+        dr3dw.at<double>(5) *= (rightrow - leftrow);
+        dr3dw.at<double>(6) *= (rightrow - leftrow);
+        dr3dw.at<double>(7) *= (rightrow - leftrow);
+        dr3dw.at<double>(8) *= (rightrow - leftrow);
     }
 
-    if (dr3dv)
-        cvZero(dr3dv);
+    // if (!dr3dv.empty())
+        // cvZero(dr3dv);
+        dr3dv.setTo(0);
 
-    if (dt3dv || dt3dw)
+    // if (dt3dv || dt3dw)
     {
         double _t1[3], _t1_v0[3], _t1_v1[3], _t2[3], _t3[3], _dxdR2[3 * 9], _dxdR1[3 * 9], _dxdt1[3 * 3], _dxdt1_v0[3 * 3], _W3[3 * 9], _W4[3 * 3];
-        CvMat t1 = cvMat(3, 1, CV_64F, _t1), t2 = cvMat(3, 1, CV_64F, _t2);
-        CvMat t1_v0 = cvMat(3, 1, CV_64F, _t1_v0), t1_v1 = cvMat(3, 1, CV_64F, _t1_v1);
-        CvMat t3 = cvMat(3, 1, CV_64F, _t3);
-        CvMat dxdR2 = cvMat(3, 9, CV_64F, _dxdR2);
-        CvMat dxdt1 = cvMat(3, 3, CV_64F, _dxdt1);
-        CvMat dxdR1 = cvMat(3, 9, CV_64F, _dxdR1);
-        CvMat dxdt1_v0 = cvMat(3, 3, CV_64F, _dxdt1_v0);
-        CvMat W3 = cvMat(3, 9, CV_64F, _W3);
-        CvMat W4 = cvMat(3, 3, CV_64F, _W4);
+        cv::Mat t1 = cv::Mat(3, 1, CV_64F, _t1), t2 = cv::Mat(3, 1, CV_64F, _t2);
+        cv::Mat t1_v0 = cv::Mat(3, 1, CV_64F, _t1_v0), t1_v1 = cv::Mat(3, 1, CV_64F, _t1_v1);
+        cv::Mat t3 = cv::Mat(3, 1, CV_64F, _t3);
+        cv::Mat dxdR2 = cv::Mat(3, 9, CV_64F, _dxdR2);
+        cv::Mat dxdt1 = cv::Mat(3, 3, CV_64F, _dxdt1);
+        cv::Mat dxdR1 = cv::Mat(3, 9, CV_64F, _dxdR1);
+        cv::Mat dxdt1_v0 = cv::Mat(3, 3, CV_64F, _dxdt1_v0);
+        cv::Mat W3 = cv::Mat(3, 9, CV_64F, _W3);
+        cv::Mat W4 = cv::Mat(3, 3, CV_64F, _W4);
 
-        CV_Assert(CV_IS_MAT(_tvec) && CV_IS_MAT(_vvec));
-        CV_Assert(CV_ARE_SIZES_EQ(_tvec, _vvec));
+        // CV_Assert(CV_IS_MAT(_tvec) && CV_IS_MAT(_vvec));
+        // CV_Assert(CV_ARE_SIZES_EQ(_tvec, _vvec));
+         CV_Assert(_tvec.size() == _vvec.size());
 
-        cvConvert(_vvec, &t1_v0);
-        cvConvert(_vvec, &t1_v1);
+        // cvConvert(_vvec, &t1_v0);
+        _vvec.assignTo(t1_v0);
+        // cvConvert(_vvec, &t1_v1);
+        _vvec.assignTo(t1_v1);
         _t1_v0[0] = -1 * _t1_v0[0] * leftrow;
         _t1_v0[1] = -1 * _t1_v0[1] * leftrow;
         _t1_v0[2] = -1 * _t1_v0[2] * leftrow;
@@ -240,36 +259,45 @@ void ComposeRT(const CvMat *_wvec, const CvMat *_vvec, // rotation and velocity
         _t1_v1[1] = _t1_v1[1] * rightrow;
         _t1_v1[2] = _t1_v1[2] * rightrow;
 
-        cvMatMulAdd(&R1, &t1_v0, &t1_v1, &t1);
-        cvConvert(_tvec, &t2);
+        // cvMatMulAdd(&R1, &t1_v0, &t1_v1, &t1);
+        t1 = R1 * t1_v0 + t1_v1;
+        // cvConvert(_tvec, &t2);
+        _tvec.assignTo(t2);
 
-        cvMatMulAdd(&R2, &t1, &t2, &t3);
+        // cvMatMulAdd(&R2, &t1, &t2, &t3);
+        t3 = R2 * t1 + t2;
 
-        if (_tvec3)
-            cvConvert(&t3, _tvec3);
+        // if (_tvec3)
+            // cvConvert(&t3, _tvec3);
+            t3.assignTo(_tvec3);
 
-        if (dt3dw || dt3dv)
+        // if (dt3dw || dt3dv)
         {
-            cvCalcMatMulDeriv(&R2, &t1, &dxdR2, &dxdt1);
-            cvCalcMatMulDeriv(&R1, &t1_v0, &dxdR1, &dxdt1_v0);
-            if (dt3dw)
-            {
-                cvMatMul(&dxdt1, &dxdR1, &W3);
-                cvMatMul(&W3, &dR1dr1, &W4);
-                cvConvert(&W4, dt3dw); // * delta row
+            // cvCalcMatMulDeriv(&R2, &t1, &dxdR2, &dxdt1);
+            cv::matMulDeriv(R2, t1, dxdR2, dxdt1);
+            // cvCalcMatMulDeriv(&R1, &t1_v0, &dxdR1, &dxdt1_v0);
+            cv::matMulDeriv(R2, t1, dxdR2, dxdt1);
 
-                double *ptrdata = dt3dw->data.db;
-                ptrdata[0] = ptrdata[0] * (rightrow - leftrow);
-                ptrdata[1] = ptrdata[1] * (rightrow - leftrow);
-                ptrdata[2] = ptrdata[2] * (rightrow - leftrow);
-                ptrdata[3] = ptrdata[3] * (rightrow - leftrow);
-                ptrdata[4] = ptrdata[4] * (rightrow - leftrow);
-                ptrdata[5] = ptrdata[5] * (rightrow - leftrow);
-                ptrdata[6] = ptrdata[6] * (rightrow - leftrow);
-                ptrdata[7] = ptrdata[7] * (rightrow - leftrow);
-                ptrdata[8] = ptrdata[8] * (rightrow - leftrow);
+            // if (dt3dw)
+            {
+                // cvMatMul(&dxdt1, &dxdR1, &W3);
+                W3 = dxdt1 * dxdR1;
+                // cvMatMul(&W3, &dR1dr1, &W4);
+                W4 = W3 * dR1dr1;
+                // cvConvert(&W4, dt3dw); // * delta row
+                W4.assignTo(dt3dw);
+
+                dt3dw.at<double>(0) *= (rightrow - leftrow);
+                dt3dw.at<double>(1) *= (rightrow - leftrow);
+                dt3dw.at<double>(2) *= (rightrow - leftrow);
+                dt3dw.at<double>(3) *= (rightrow - leftrow);
+                dt3dw.at<double>(4) *= (rightrow - leftrow);
+                dt3dw.at<double>(5) *= (rightrow - leftrow);
+                dt3dw.at<double>(6) *= (rightrow - leftrow);
+                dt3dw.at<double>(7) *= (rightrow - leftrow);
+                dt3dw.at<double>(8) *= (rightrow - leftrow);
             }
-            if (dt3dv)
+            // if (dt3dv)
             {
                 _dxdt1_v0[0] = -leftrow * _dxdt1_v0[0] + rightrow;
                 _dxdt1_v0[1] = -leftrow * _dxdt1_v0[1];
@@ -281,8 +309,10 @@ void ComposeRT(const CvMat *_wvec, const CvMat *_vvec, // rotation and velocity
                 _dxdt1_v0[7] = -leftrow * _dxdt1_v0[7];
                 _dxdt1_v0[8] = -leftrow * _dxdt1_v0[8] + rightrow;
 
-                cvMatMul(&dxdt1, &dxdt1_v0, &W4);
-                cvConvert(&W4, dt3dv);
+                // cvMatMul(&dxdt1, &dxdt1_v0, &W4);
+                W4 = dxdt1 * dxdt1_v0;
+                // cvConvert(&W4, dt3dv);
+                W4.assignTo(dt3dv);
             }
         }
     }
@@ -516,7 +546,7 @@ int Initializer::FindMotionMThread(const vector<vector<size_t>> &Sets)
     invSigmaSquare[1] = invSigmaSquare[0] * factor * factor;
     invSigmaSquare[2] = invSigmaSquare[1] * factor * factor;
     invSigmaSquare[3] = invSigmaSquare[2] * factor * factor;
-    invSigmaSquare[4] = invSigmaSquare[3] * factor * factor; 
+    invSigmaSquare[4] = invSigmaSquare[3] * factor * factor;
     invSigmaSquare[5] = invSigmaSquare[5] * factor * factor;
     invSigmaSquare[6] = invSigmaSquare[6] * factor * factor;
     invSigmaSquare[7] = invSigmaSquare[7] * factor * factor;
@@ -575,7 +605,7 @@ int Initializer::FindMotionMThread(const vector<vector<size_t>> &Sets)
 
             // FILTER
             double vec = sqrt(t0 * t0 + t1 * t1 + t2 * t2);
-            // t0 / scale > 0 || 
+            // t0 / scale > 0 ||
             if (vec * 3.6 / scale > 100 || fabs(w0) / scale > 3 || fabs(w1) / scale > 3 || fabs(w2) / scale > 3)
             {
                 IsCalc = false;
@@ -1013,7 +1043,7 @@ int Initializer::TestR6M(std::string path, std::string matchPath, cv::Mat R, cv:
     LoadParam(path, paramsList);
 
     int taskCnt = paramsList.size();
-    bool multiThread = false;
+    bool multiThread = true;
     int threadCnt = THREAD_CNT;
     std::vector<std::vector<std::vector<double>>> resList;
     taskCnt = 200;
@@ -1954,4 +1984,4 @@ void Initializer::DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat
         R2 = -R2;
 }
 
-} 
+}

@@ -1,3 +1,6 @@
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 #include "System.h"
 #include <thread>
 #include <iomanip>
@@ -7,6 +10,19 @@
 #include "../util/globalCalib.h"
 #include "../util/globalFuncs.h"
 #include <Eigen/Geometry>
+
+#include <filesystem>
+#include "NpyArraySerializer.hpp"
+
+namespace detail {
+std::unique_ptr<std::ostream> openForWriting(const std::filesystem::path& path)
+{
+    auto stream = new std::ofstream;
+    stream->open(path, std::ios_base::out | std::ios_base::binary);
+    return std::unique_ptr<std::ostream>(stream);
+}
+}
+
 
 using namespace std;
 namespace SFRSS
@@ -30,7 +46,7 @@ System::System(const string &strSettingsFile, string basePath, int workMode){
     // Initialize the Tracking thread
     // (it will live in the main thread of execution, the one that called this constructor)
     mpEstMotion = new EstMotion(this, strSettingsFile, basePath);
-  
+
     SetBaselineScaleG(2);
     mpRefineMotion = new RefineMotion(this, RowTimeG);
     mpStereoMatch = new StereoMatch(this, strSettingsFile);
@@ -51,7 +67,7 @@ System::System(const string &strSettingsFile, string basePath, int workMode){
     }
     mInvalidDisp = mpStereoMatch->InitStereoMatch(mdisparitySize, input_depth, output_depth, mIsSubPixel);
     SetDispG(mdisparitySize, mInvalidDisp, mSubPixelLvl);
-    mpStereoMatch->InitRSProjection(10, 0); 
+    mpStereoMatch->InitRSProjection(10, 0);
     mpStereoMatch->SetShowMaxDisparity(mdisparitySize); // MaxShowDisparity
 
     mptrDisparity0 = (void *)malloc(wG[0]*hG[0]*output_depth/8);
@@ -112,10 +128,10 @@ int SaveRawDisparity(uint16_t * mptrDisparity, string dirpath, string name){
 
 
 // invalided value: 0
-int SaveRawDepthMap(double * mptrDepthMap, string dirpath, string name){
+int SaveRawDepthMap(double * mptrDepthMap, std::filesystem::path dirpath, string name){
     // SaveDisbarity
-    dirpath = dirpath + "/" + name + ".bin";
-    FILE * fptr = fopen(dirpath.c_str(), "wb");
+    dirpath = dirpath / (name + ".bin");
+    FILE * fptr = fopen(dirpath.string().c_str(), "wb");
     fwrite(mptrDepthMap, sizeof(double), hG[0]*wG[0], fptr);
     fclose(fptr);
 
@@ -123,11 +139,11 @@ int SaveRawDepthMap(double * mptrDepthMap, string dirpath, string name){
 }
 
 
-int SaveRGBDisparity(uint16_t * mptrDisparity, string dirpath, string name, bool IsFlip = false){
-    dirpath = dirpath + "/" + name;
+int SaveRGBDisparity(uint16_t * mptrDisparity, std::filesystem::path dirpath, string name, bool IsFlip = false){
+    dirpath = dirpath / name;
 
     int lvl = 0;
-	cv::Mat_<uint16_t> disparity(hG[lvl], wG[lvl]); 
+	cv::Mat_<uint16_t> disparity(hG[lvl], wG[lvl]);
 	cv::Mat disparity_8u,disparity_color;
 
 	memcpy(disparity.data, mptrDisparity, wG[lvl]*hG[lvl]*sizeof(uint16_t)); // uint16_t
@@ -144,7 +160,7 @@ int SaveRGBDisparity(uint16_t * mptrDisparity, string dirpath, string name, bool
         cv::flip(disparity_color, disparity_color, 1);
     }
 
-	cv::imwrite(dirpath, disparity_color);
+	cv::imwrite(dirpath.string().c_str(), disparity_color);
 
     return 0;
 }
@@ -153,9 +169,9 @@ int SaveRGBDisparity(uint16_t * mptrDisparity, string dirpath, string name, bool
 
 
 // Undist RS effect and calc 3D point cloud
-int UndistRSEffectToRect(uint8_t * img, uint16_t * disparity, int lvl, 
-                   vector<double> motionState, 
-                   uint8_t * destImg, 
+int UndistRSEffectToRect(uint8_t * img, uint16_t * disparity, int lvl,
+                   vector<double> motionState,
+                   uint8_t * destImg,
                    double * destDepthMap,
                    vector<Vec3> * pointtCloud){
     pointtCloud->clear();
@@ -188,7 +204,7 @@ int UndistRSEffectToRect(uint8_t * img, uint16_t * disparity, int lvl,
             if (disp == invalidDispG || disp >= subPixelLevlG*maxDisparityG[lvl]){
                 continue;
             }
-            
+
             curLeftPoint << uu, vv, 1.0;
             curLeftPoint = KiG[lvl] * curLeftPoint;
 
@@ -207,10 +223,10 @@ int UndistRSEffectToRect(uint8_t * img, uint16_t * disparity, int lvl,
 
             double dispf = disparity[iid];
             // printf("dispf:%f\n", dispf);
-            dispf = (dispf/subPixelLevlG) + 0.000001; // +1 
+            dispf = (dispf/subPixelLevlG) + 0.000001; // +1
             // printf("baselineScaleG: %d\n", baselineScaleG);
             // printf("baselineG: %f\n", baselineG);
-            double depthWorld = baselineScaleG * baselineG * fxG[lvl] / dispf; // baselineScaleG * 
+            double depthWorld = baselineScaleG * baselineG * fxG[lvl] / dispf; // baselineScaleG *
             // printf("dispf2:%f\n", depthWorld);
 
             double lamba = (depthWorld - start[2]) / inc[2];
@@ -261,7 +277,7 @@ void InterpolateDisp(uint8_t * ptrLeftImage, uint16_t * ptr_result_u16, int lvl)
 
 
     for (int vv = Radius; vv < localh - Radius; ++vv){
-        for (int uu = Radius; uu < localw - Radius; ++uu){            
+        for (int uu = Radius; uu < localw - Radius; ++uu){
             int iid = vv*localw + uu;
             if (ptr_result_u16[iid] == invalidDispG){
                 // Try to interpolate
@@ -288,7 +304,7 @@ void InterpolateDisp(uint8_t * ptrLeftImage, uint16_t * ptr_result_u16, int lvl)
                     aveNum += 1;
                     // printf("%f\n", SumWeights);
                 }
-                
+
                 if (SumWeights > ConfidenceThreshold){
                     TargetValue = TargetValue / SumWeights;
                     ptr_result_new[iid] = (uint16_t)TargetValue;
@@ -301,8 +317,8 @@ void InterpolateDisp(uint8_t * ptrLeftImage, uint16_t * ptr_result_u16, int lvl)
 
 }
 
-int SaveStates(std::string path, vector<vector<double>> States){
-    FILE * fp = fopen(path.c_str(), "w");
+int SaveStates(std::filesystem::path path, vector<vector<double>> States){
+    FILE * fp = fopen(path.string().c_str(), "w");
     for (unsigned int iid = 0; iid < States.size(); ++iid){
         vector<double> initialState = States[iid];
         fprintf(fp, "%.10f %.10f %.10f %.10f %.10f %.10f\n", initialState[0], initialState[1], initialState[2], initialState[3], initialState[4], initialState[5]);
@@ -339,7 +355,7 @@ int System::Run2(const cv::Mat & leftImage, const cv::Mat & rightImage, double t
     vector<Vec3> pointCloud;
 
     if (lastState.size() > 0){
-        finalState = lastState;         
+        finalState = lastState;
     }
     else{
         finalState.push_back(0.0);
@@ -350,11 +366,17 @@ int System::Run2(const cv::Mat & leftImage, const cv::Mat & rightImage, double t
         finalState.push_back(0.0);
     }
 
+    std::cout << "Entering loop" << std::endl;
+    std::filesystem::path savePath = mSaveDirPath;
+
     int iters[PYR_LEVELS] = {1,2,3,5,3,3};
     for (int lvl = pyramidLvl - 1; lvl >= endLvl; --lvl){
         for (int kk = 0; kk < iters[lvl]; ++kk){
+            std::cout << "RSProjection3" << std::endl;
             mpStereoMatch->RSProjection3(finalState, lvl);
+            std::cout << "StereoMatchFinalMode4" << std::endl;
             mpStereoMatch->StereoMatchFinalMode4(lvl, ptrDisparity);
+            std::cout << "Refine2" << std::endl;
             finalState = mpRefineMotion->Refine2((uint16_t *)ptrDisparity, finalState, lvl);
         }
 
@@ -364,17 +386,38 @@ int System::Run2(const cv::Mat & leftImage, const cv::Mat & rightImage, double t
 
             // IsSave
             if (IsSave){
+                std::cout << "Saving, path: " << mSaveDirPath << std::endl;
+                std::cout << "Image name" << imageName << std::endl;
+                std::cout << "Saving image" << std::endl;
+
+
+
                 // SaveRawDisparity((uint16_t *)ptrDisparity, mSaveDirPath + "/02/bin", imageName);
                 char tempbuffer[256] = {0};
                 memcpy(tempbuffer, imageName.c_str(), imageName.length() - 4);
-                
-                UndistRSEffectToRect(LeftUnDistTarget.data,(uint16_t *)ptrDisparity,0,finalState,mptrUndistImg,mptrDepthMap, &pointCloud);
-                SaveRawDepthMap(mptrDepthMap, mSaveDirPath + "/undisted_depth", tempbuffer);
-                // cv::Mat undistImg_Rect(hG[0], wG[0], CV_8U, mptrUndistImg);
-                // cv::imwrite(mSaveDirPath + "/undist_rect/rgb/"+ imageName, undistImg_Rect);
 
+                std::cout << "SUndistRSEffectToRect" << std::endl;
+                UndistRSEffectToRect(LeftUnDistTarget.data,(uint16_t *)ptrDisparity,0,finalState,mptrUndistImg,mptrDepthMap, &pointCloud);
+
+
+                std::vector<float> flatpcd;
+                for(const auto& v : pointCloud) {
+                    flatpcd.push_back(v.x());
+                    flatpcd.push_back(v.y());
+                    flatpcd.push_back(v.z());
+                }
+
+                writeNpy(savePath / "pointcloud" / (imageName + ".npy"),   flatpcd);
+
+                std::cout << "UndistRSEffectToRect" << std::endl;
+                SaveRawDepthMap(mptrDepthMap, savePath / "undisted_depth", tempbuffer);
+                cv::Mat undistImg_Rect(hG[0], wG[0], CV_8U, mptrUndistImg);
+                cv::imwrite((savePath / "undist_rect" / "rgb" / (imageName+".png")).string().c_str(), undistImg_Rect);
+
+                std::cout << "InterpolateDisp" << std::endl;
                 InterpolateDisp((uint8_t *)LeftUnDistTarget.data, (uint16_t *)ptrDisparity, 0);
-                SaveRGBDisparity((uint16_t *)ptrDisparity, mSaveDirPath + "/disparity_rgb", imageName);
+                std::cout << "SaveRGBDisparity" << std::endl;
+                SaveRGBDisparity((uint16_t *)ptrDisparity, savePath / "disparity_rgb", imageName + ".png");
             }
 
             if (IsShow){
@@ -391,18 +434,20 @@ int System::Run2(const cv::Mat & leftImage, const cv::Mat & rightImage, double t
         char tempbuffer[256] = {0};
         memcpy(tempbuffer, imageName.c_str(), imageName.length() - 4);
 
+        std::cout << "SaveStates" << std::endl;
         vector<vector<double>> tempStates;
         tempStates.push_back(finalState);
-        SaveStates(mSaveDirPath + "/motion_states/" + tempbuffer + ".txt", tempStates);
+        SaveStates(savePath / "motion_states" / (imageName + ".txt"), tempStates);
 
         // Save left undist image and right undist image
-        cv::imwrite((mSaveDirPath + "/left/" + imageName).c_str(), LeftUnDistTarget);
-        cv::imwrite((mSaveDirPath + "/right/" + imageName).c_str(), RightUnDistTarget);
+        cv::imwrite((savePath / "left" / (imageName + ".png")).string().c_str(), LeftUnDistTarget);
+        cv::imwrite((savePath / "right" / (imageName + ".png")).string().c_str(), RightUnDistTarget);
 
+        std::cout << "save baseline map" << std::endl;
         // save baseline map
         cv::Mat baselineMap;
         mpStereoMatch->GenerateBaselineMap(baselineMap);
-        cv::imwrite((mSaveDirPath + "/baseline_map/" + imageName).c_str(), baselineMap);
+        cv::imwrite((savePath / "baseline_map" / (imageName + ".png")).string().c_str(), baselineMap);
 
         lastState = finalState;
     }
@@ -444,4 +489,4 @@ void System::Shutdown()
 {
 }
 
-} 
+}

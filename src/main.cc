@@ -5,59 +5,45 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui.hpp>
 #include "./System/System.h"
-#include <dirent.h>
+#include <filesystem>
 #include <vector>
 
 using namespace std;
 
 
 // Load Images from Dir
-inline int getdir (std::string dir, std::vector<std::string> &files)
+inline int getdir (const std::filesystem::path& dir, std::vector<std::filesystem::path> &files)
 {
-    DIR *dp;
-    struct dirent *dirp;
-    if((dp  = opendir(dir.c_str())) == NULL)
+    const std::filesystem::path directory{dir};
+
+    for (auto const& dir_entry : std::filesystem::directory_iterator{directory})
     {
-        return -1;
+        if(!dir_entry.is_regular_file()) {
+            continue;
+        }
+
+        files.push_back(dir_entry.path());
     }
 
-    while ((dirp = readdir(dp)) != NULL) {
-    	std::string name = std::string(dirp->d_name);
-
-    	if(name != "." && name != ".." && name[0] != '.')
-    		files.push_back(name);
-    }
-    closedir(dp);
     std::sort(files.begin(), files.end());
-    if(dir.at( dir.length() - 1 ) != '/') dir = dir+"/";
-	for(unsigned int i=0;i<files.size();i++)
- 	{
-		// printf("%d %s\n",i, files[i].c_str());
-		if(files[i].at(0) != '/')
-			files[i] = dir + files[i];
-	}
-
     return files.size();
 }
 
 
-inline int getfiles (std::string dir, std::vector<std::string> &files)
+inline int getfiles (const std::filesystem::path& dir, std::vector<std::filesystem::path> &files)
 {
-    DIR *dp;
-    struct dirent *dirp;
-    if((dp  = opendir(dir.c_str())) == NULL)
+    const std::filesystem::path directory{dir};
+
+    for (auto const& dir_entry : std::filesystem::directory_iterator{directory})
     {
-        return -1;
-    }
-    while ((dirp = readdir(dp)) != NULL) {
-    	std::string name = std::string(dirp->d_name);
+        if(!dir_entry.is_regular_file()) {
+            continue;
+        }
 
-    	if(name != "." && name != ".." && name[0] != '.')
-    		files.push_back(name);
+        files.push_back(dir_entry.path().stem());
     }
-    closedir(dp);
+
     std::sort(files.begin(), files.end());
-
     return files.size();
 }
 
@@ -70,12 +56,12 @@ int main(int argc, char **argv)
     }
 
     // Retrieve paths to images
-    vector<string> leftImagePaths;
-    vector<string> rightImagePaths;
-    vector<string> imageNames;
+    vector<std::filesystem::path> leftImagePaths;
+    vector<std::filesystem::path> rightImagePaths;
+    vector<std::filesystem::path> imageNames;
     vector<double> vTimestamps;
-    string leftDirPath = string(argv[1]) + "/frames/cam0";
-    string rightDirPath = string(argv[1]) + "/frames/cam1";
+    std::filesystem::path leftDirPath = std::filesystem::path(argv[1]) / "frames" / "cam0";
+    std::filesystem::path rightDirPath = std::filesystem::path(argv[1]) / "frames" / "cam1";
     int mode = atoi(argv[2]);
 
     getdir(leftDirPath, leftImagePaths);
@@ -86,7 +72,7 @@ int main(int argc, char **argv)
     char buffer[256] = {0};
     for (unsigned int ii = 0; ii < leftImagePaths.size(); ++ii){
         memset(buffer, 0, 256);
-        memcpy(buffer, imageNames[ii].c_str(), imageNames[ii].size() - 4);
+        memcpy(buffer, imageNames[ii].c_str(), imageNames[ii].string().size() - 4);
         vTimestamps.push_back(atof(buffer));
     }
 
@@ -98,6 +84,7 @@ int main(int argc, char **argv)
     cout << endl << "-------" << endl;
     cout << "Start processing sequence ..." << endl;
     cout << "Images in the sequence: " << nPairs << endl << endl;
+    cout << "mode: " << mode << endl;
 
     // Main loop
     cv::Mat leftImage, rightImage;
@@ -105,9 +92,12 @@ int main(int argc, char **argv)
     {
         printf("///////////////////////////////////////////////////////////////////\n");
         printf("frameId:%d\n", ni);
+        std::cout << "Left frame " << leftImagePaths[ni] << std::endl;
+        std::cout << "Right frame " << rightImagePaths[ni] << std::endl;
+
         // Read image from file
-        leftImage = cv::imread(leftImagePaths[ni], 0);
-        rightImage = cv::imread(rightImagePaths[ni], 0);
+        leftImage = cv::imread(leftImagePaths[ni].string(), 0);
+        rightImage = cv::imread(rightImagePaths[ni].string(), 0);
         double tframe = vTimestamps[ni];
 
         if (leftImage.empty() || rightImage.empty()){
@@ -120,10 +110,10 @@ int main(int argc, char **argv)
 
         // Pass the image to the SLAM system
         if (mode == 0){
-            sys.Run2(leftImage, rightImage, tframe, imageNames[ni]);
+            sys.Run2(leftImage, rightImage, tframe, imageNames[ni].string());
         }
         else{
-            sys.Run3(leftImage, rightImage, tframe, imageNames[ni]);
+            sys.Run3(leftImage, rightImage, tframe, imageNames[ni].string());
         }
 
         // Check

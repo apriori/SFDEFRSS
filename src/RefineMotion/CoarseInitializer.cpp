@@ -7,11 +7,15 @@
 #include "../util/ImageDisplay.h"
 #include <opencv2/core/core.hpp>
 #include <opencv2/opencv.hpp>
-#include <thread>  
+#include <thread>
 
-#if !defined(__SSE3__) && !defined(__SSE2__) && !defined(__SSE1__)
-#include "SSE2NEON.h"
-#endif
+
+#include <opencv2/core/core_c.h>
+
+
+// #if !defined(__SSE3__) && !defined(__SSE2__) && !defined(__SSE1__)
+// #include "SSE2NEON.h"
+// #endif
 
 using namespace cv;
 
@@ -161,15 +165,15 @@ Vec2 RsProj(Vec3 RawLeftPoint, double leftRow, double guessRightRow, double idep
 
 
 
-int ComposeUV(double *_wvec, double *_vvec, CvMat *RLR, CvMat *tvec, CvMat *leftPoint, double idepth, double leftrow, double rightrow, double *ptrUV, double *_dUVdw, double *_dUVdv, double *_dUVdid, int lvl)
+int ComposeUV(double *_wvec, double *_vvec, cv::Mat RLR, cv::Mat tvec, cv::Mat leftPoint, double idepth, double leftrow, double rightrow, double *ptrUV, double *_dUVdw, double *_dUVdv, double *_dUVdid, int lvl)
 {
-	double _wTrows[3]; 
+	double _wTrows[3];
 	double _R1[9], _dR1dwrows[9 * 3];
-	double _dR3dw[9 * 3]; 
-	CvMat wTrows = cvMat(3, 1, CV_64F, _wTrows);
-	CvMat R1 = cvMat(3, 3, CV_64F, _R1);
-	CvMat dR1dwrows = cvMat(9, 3, CV_64F, _dR1dwrows);
-	CvMat dR3dw = cvMat(9, 3, CV_64F, _dR3dw);
+	double _dR3dw[9 * 3];
+	cv::Mat wTrows = cv::Mat(3, 1, CV_64F, _wTrows);
+	cv::Mat R1 = cv::Mat(3, 3, CV_64F, _R1);
+	cv::Mat dR1dwrows = cv::Mat(9, 3, CV_64F, _dR1dwrows);
+	cv::Mat dR3dw = cv::Mat(9, 3, CV_64F, _dR3dw);
 
 	// convert data from a mat to a mat, sometimes, will change data type
 	memcpy(_wTrows, _wvec, sizeof(double) * 3);
@@ -177,35 +181,53 @@ int ComposeUV(double *_wvec, double *_vvec, CvMat *RLR, CvMat *tvec, CvMat *left
 	_wTrows[1] = _wTrows[1] * (rightrow - leftrow);
 	_wTrows[2] = _wTrows[2] * (rightrow - leftrow);
 
-	cvRodrigues2(&wTrows, &R1, &dR1dwrows);
+	// cvRodrigues2(&wTrows, &R1, &dR1dwrows);
+	cv::Rodrigues(wTrows, R1, dR1dwrows);
 
-	double *ptrdata = dR1dwrows.data.db;
+	// double *ptrdata = dR1dwrows.data.db;
 	for (int ii = 0; ii < 3 * 9; ++ii){
-		ptrdata[ii] = ptrdata[ii] * (rightrow - leftrow);
+		dR1dwrows.at<double>(ii) *= (rightrow - leftrow);
 	}
 
 	double _R3[9], _dR3dR1[9 * 9], _dR3dR2[9 * 9];
-	CvMat R3 = cvMat(3, 3, CV_64F, _R3);
-	CvMat dR3dR1 = cvMat(9, 9, CV_64F, _dR3dR1), dR3dR2 = cvMat(9, 9, CV_64F, _dR3dR2);
+	cv::Mat R3 = cv::Mat(3, 3, CV_64F, _R3);
+	cv::Mat dR3dR1 = cv::Mat(9, 9, CV_64F, _dR3dR1), dR3dR2 = cv::Mat(9, 9, CV_64F, _dR3dR2);
 
-	cvMatMul(RLR, &R1, &R3);
+	//cvMatMul(RLR, &R1, &R3);
+
+	// std::cout << "0" << std::endl;
+	R3 = RLR * R1;
+
 	// Deriv
-	cvCalcMatMulDeriv(RLR, &R1, &dR3dR2, &dR3dR1);
-	cvMatMul(&dR3dR1, &dR1dwrows, &dR3dw);
+	// cvCalcMatMulDeriv(RLR, &R1, &dR3dR2, &dR3dR1);
+	cv::matMulDeriv(RLR, R1, dR3dR2, dR3dR1);
 
+	// cvMatMul(&dR3dR1, &dR1dwrows, &dR3dw);
+	// std::cout << "1" << std::endl;
+
+	// std::cout << "dR3dR1 rows: " << dR3dR1.rows << std::endl;
+	// std::cout << "dR3dR1 cols: " << dR3dR1.cols << std::endl;
+	// std::cout << "dR3dR1 width: " << dR3dR1.size().width << std::endl;
+	// std::cout << "dR1dwrows rows: " << dR1dwrows.rows << std::endl;
+	// std::cout << "dR1dwrows cols: " << dR1dwrows.cols << std::endl;
+	// std::cout << "dR1dwrows width: " << dR1dwrows.size().width << std::endl;
+
+	// TODO: is the transpose correct?
+	dR3dw = dR3dR1 * dR1dwrows.t();
+	// std::cout << "1 done" << std::endl;
 
     double _t1[3], _t1_v0[3], _t1_v1[3], _t2[3], _t3[3], _dt3dR2[3 * 9], _dt1dR1[3 * 9];
     double _dt3dt1[3 * 3], _dt1dt1_v0[3 * 3], _W3[3 * 9], _dt3dw[3 * 3], _dt3dv[3 * 3];
-    CvMat t1 = cvMat(3, 1, CV_64F, _t1), t2 = cvMat(3, 1, CV_64F, _t2);
-    CvMat t1_v0 = cvMat(3, 1, CV_64F, _t1_v0), t1_v1 = cvMat(3, 1, CV_64F, _t1_v1);
-    CvMat t3 = cvMat(3, 1, CV_64F, _t3);
-    CvMat dt3dR2 = cvMat(3, 9, CV_64F, _dt3dR2);
-    CvMat dt3dt1 = cvMat(3, 3, CV_64F, _dt3dt1);
-    CvMat dt1dR1 = cvMat(3, 9, CV_64F, _dt1dR1);
-    CvMat dt1dt1_v0 = cvMat(3, 3, CV_64F, _dt1dt1_v0);
-    CvMat W3 = cvMat(3, 9, CV_64F, _W3);
-    CvMat dt3dw = cvMat(3, 3, CV_64F, _dt3dw);
-    CvMat dt3dv = cvMat(3, 3, CV_64F, _dt3dv);
+    cv::Mat t1 = cv::Mat(3, 1, CV_64F, _t1), t2 = cv::Mat(3, 1, CV_64F, _t2);
+    cv::Mat t1_v0 = cv::Mat(3, 1, CV_64F, _t1_v0), t1_v1 = cv::Mat(3, 1, CV_64F, _t1_v1);
+    cv::Mat t3 = cv::Mat(3, 1, CV_64F, _t3);
+    cv::Mat dt3dR2 = cv::Mat(3, 9, CV_64F, _dt3dR2);
+    cv::Mat dt3dt1 = cv::Mat(3, 3, CV_64F, _dt3dt1);
+    cv::Mat dt1dR1 = cv::Mat(3, 9, CV_64F, _dt1dR1);
+    cv::Mat dt1dt1_v0 = cv::Mat(3, 3, CV_64F, _dt1dt1_v0);
+    cv::Mat W3 = cv::Mat(3, 9, CV_64F, _W3);
+    cv::Mat dt3dw = cv::Mat(3, 3, CV_64F, _dt3dw);
+    cv::Mat dt3dv = cv::Mat(3, 3, CV_64F, _dt3dv);
 
     memcpy(_t1_v0, _vvec, sizeof(double) * 3);
     memcpy(_t1_v1, _vvec, sizeof(double) * 3);
@@ -217,16 +239,29 @@ int ComposeUV(double *_wvec, double *_vvec, CvMat *RLR, CvMat *tvec, CvMat *left
     _t1_v1[1] = _t1_v1[1] * rightrow;
     _t1_v1[2] = _t1_v1[2] * rightrow;
 
-    cvConvert(tvec, &t2);
-    cvMatMulAdd(&R1, &t1_v0, &t1_v1, &t1);
-    cvMatMulAdd(RLR, &t1, &t2, &t3);
+    // cvConvert(tvec, &t2);
+	tvec.assignTo(t2);
 
-    cvCalcMatMulDeriv(&R1, &t1_v0, &dt1dR1, &dt1dt1_v0);
-    cvCalcMatMulDeriv(RLR, &t1, &dt3dR2, &dt3dt1);
+    // cvMatMulAdd(&R1, &t1_v0, &t1_v1, &t1);
+	// std::cout << "2" << std::endl;
+	t1 = R1 * t1_v0 + t1_v1;
+    // cvMatMulAdd(RLR, &t1, &t2, &t3);
+	// std::cout << "3" << std::endl;
+	t3 = RLR * t1 + t2;
 
-    cvMatMul(&dt3dt1, &dt1dR1, &W3);
-    cvMatMul(&W3, &dR1dwrows, &dt3dw);
+    // cvCalcMatMulDeriv(&R1, &t1_v0, &dt1dR1, &dt1dt1_v0);
+	cv::matMulDeriv(R1, t1_v0, dt1dR1, dt1dt1_v0);
+    // cvCalcMatMulDeriv(RLR, &t1, &dt3dR2, &dt3dt1);
+	cv::matMulDeriv(RLR, t1, dt3dR2, dt3dt1);
 
+    // cvMatMul(&dt3dt1, &dt1dR1, &W3);
+	// std::cout << "4" << std::endl;
+
+	W3 = dt3dt1 * dt1dR1;
+    // cvMatMul(&W3, &dR1dwrows, &dt3dw);
+	// std::cout << "4.1" << std::endl;
+	// TODO: is the transpose correct?
+	dt3dw = W3 * dR1dwrows.t();
     _dt1dt1_v0[0] = -leftrow * _dt1dt1_v0[0] + rightrow;
     _dt1dt1_v0[1] = -leftrow * _dt1dt1_v0[1];
     _dt1dt1_v0[2] = -leftrow * _dt1dt1_v0[2];
@@ -236,21 +271,25 @@ int ComposeUV(double *_wvec, double *_vvec, CvMat *RLR, CvMat *tvec, CvMat *left
     _dt1dt1_v0[6] = -leftrow * _dt1dt1_v0[6];
     _dt1dt1_v0[7] = -leftrow * _dt1dt1_v0[7];
     _dt1dt1_v0[8] = -leftrow * _dt1dt1_v0[8] + rightrow;
-    cvMatMul(&dt3dt1, &dt1dt1_v0, &dt3dv);
+	dt3dv = dt3dt1 * dt1dt1_v0;
+    // cvMatMul(&dt3dt1, &dt1dt1_v0, &dt3dv);
 
 	double _XYZ[3], _dXYZdw[9], _dXYZdv[9], _dXYZdR3[27], _dXYZdt3[9];
 	double _t3id[3];
-	CvMat XYZ = cvMat(3, 1, CV_64F, _XYZ);
-	CvMat dXYZdw = cvMat(3, 3, CV_64F, _dXYZdw);
-	CvMat dXYZdv = cvMat(3, 3, CV_64F, _dXYZdv);
-	CvMat dXYZdR3 = cvMat(3, 9, CV_64F, _dXYZdR3);
-	CvMat dXYZdt3 = cvMat(3, 3, CV_64F, _dXYZdt3);
-	CvMat t3id = cvMat(3, 1, CV_64F, _t3id);
+	cv::Mat XYZ = cv::Mat(3, 1, CV_64F, _XYZ);
+	cv::Mat dXYZdw = cv::Mat(3, 3, CV_64F, _dXYZdw);
+	cv::Mat dXYZdv = cv::Mat(3, 3, CV_64F, _dXYZdv);
+	cv::Mat dXYZdR3 = cv::Mat(3, 9, CV_64F, _dXYZdR3);
+	cv::Mat dXYZdt3 = cv::Mat(3, 3, CV_64F, _dXYZdt3);
+	cv::Mat t3id = cv::Mat(3, 1, CV_64F, _t3id);
 	_t3id[0] = _t3[0] * idepth;
 	_t3id[1] = _t3[1] * idepth;
 	_t3id[2] = _t3[2] * idepth;
-	cvMatMulAdd(&R3, leftPoint, &t3id, &XYZ);
-    cvCalcMatMulDeriv(&R3, leftPoint, &dXYZdR3, &dXYZdt3);
+	// cvMatMulAdd(&R3, leftPoint, &t3id, &XYZ);
+	// std::cout << "5" << std::endl;
+	XYZ = R3 * leftPoint + t3id;
+    // cvCalcMatMulDeriv(&R3, leftPoint, &dXYZdR3, &dXYZdt3);
+	cv::matMulDeriv(R3, leftPoint, dXYZdR3, dXYZdt3);
 	_dXYZdt3[0] = idepth;
 	_dXYZdt3[1] = 0;
 	_dXYZdt3[2] = 0;
@@ -262,9 +301,15 @@ int ComposeUV(double *_wvec, double *_vvec, CvMat *RLR, CvMat *tvec, CvMat *left
 	_dXYZdt3[8] = idepth;
 
 
-	cvMatMul(&dXYZdR3, &dR3dw, &dXYZdw);
-	cvMatMulAdd(&dXYZdt3, &dt3dw, &dXYZdw, &dXYZdw);
-	cvMatMul(&dXYZdt3, &dt3dv, &dXYZdv);
+	// cvMatMul(&dXYZdR3, &dR3dw, &dXYZdw);
+	// std::cout << "6" << std::endl;
+	dXYZdw = dXYZdR3 * dR3dw;
+	// cvMatMulAdd(&dXYZdt3, &dt3dw, &dXYZdw, &dXYZdw);
+	// std::cout << "7" << std::endl;
+	dXYZdw = dXYZdt3 * dt3dw + dXYZdw;
+	// cvMatMul(&dXYZdt3, &dt3dv, &dXYZdv);
+	// std::cout << "8" << std::endl;
+	dXYZdv = dXYZdt3 *dt3dv;
 
 
 	ptrUV[0] = fxG[lvl] * _XYZ[0] / _XYZ[2] + cxG[lvl];
@@ -272,7 +317,7 @@ int ComposeUV(double *_wvec, double *_vvec, CvMat *RLR, CvMat *tvec, CvMat *left
 
 	// Construct 2 * 3 matrix
 	double _duvdxyz[6];
-	CvMat duvdxyz = cvMat(2, 3, CV_64F, _duvdxyz);
+	cv::Mat duvdxyz = cv::Mat(2, 3, CV_64F, _duvdxyz);
 	_duvdxyz[0] = fxG[lvl] / _XYZ[2];
 	_duvdxyz[1] = 0;
 	_duvdxyz[2] = -fxG[lvl] * _XYZ[0] / (_XYZ[2] * _XYZ[2]);
@@ -280,20 +325,26 @@ int ComposeUV(double *_wvec, double *_vvec, CvMat *RLR, CvMat *tvec, CvMat *left
 	_duvdxyz[4] = fyG[lvl] / _XYZ[2];
 	_duvdxyz[5] = -fyG[lvl] * _XYZ[1] / (_XYZ[2] * _XYZ[2]);
 
-	CvMat dUVdw = cvMat(2, 3, CV_64F, _dUVdw);
-	CvMat dUVdv = cvMat(2, 3, CV_64F, _dUVdv);
-	CvMat dUVdid = cvMat(2, 1, CV_64F, _dUVdid);
+	cv::Mat dUVdw = cv::Mat(2, 3, CV_64F, _dUVdw);
+	cv::Mat dUVdv = cv::Mat(2, 3, CV_64F, _dUVdv);
+	cv::Mat dUVdid = cv::Mat(2, 1, CV_64F, _dUVdid);
 
-	cvMatMul(&duvdxyz, &dXYZdw, &dUVdw);	
-	cvMatMul(&duvdxyz, &dXYZdv, &dUVdv);
-	cvMatMul(&duvdxyz, &t3, &dUVdid);
+	// cvMatMul(&duvdxyz, &dXYZdw, &dUVdw);
+	// std::cout << "9" << std::endl;
+	dUVdw = duvdxyz *dXYZdw;
+	// cvMatMul(&duvdxyz, &dXYZdv, &dUVdv);
+	// std::cout << "10" << std::endl;
+	dUVdv = duvdxyz * dXYZdv;
+	// cvMatMul(&duvdxyz, &t3, &dUVdid);
+	// std::cout << "11" << std::endl;
+	dUVdid = duvdxyz * t3;
 
 	return 0;
 }
 
 
 void calcResAndGS_new4_MT(
-	int lvl, Vec3 Angular, Vec3 Velocity, bool IsInitialDepth, bool FixTranslation, Vec3 InitialVelocity, 
+	int lvl, Vec3 Angular, Vec3 Velocity, bool IsInitialDepth, bool FixTranslation, Vec3 InitialVelocity,
 	int threadID, int start, int end, Pnt *ptsl)
 {
 	Mat88f H_out;
@@ -336,8 +387,8 @@ void calcResAndGS_new4_MT(
 	RKi = RLRG * KiG[lvl];
 
 	double _cvRLR[9], _cvTLR[3];
-	CvMat cvRLR = cvMat(3,3,CV_64F,_cvRLR);
-	CvMat cvTLR = cvMat(3,1,CV_64F,_cvTLR);
+	cv::Mat cvRLR = cv::Mat(3,3,CV_64F,_cvRLR);
+	cv::Mat cvTLR = cv::Mat(3,1,CV_64F,_cvTLR);
 	_cvRLR[0] = RLRG(0,0);
 	_cvRLR[1] = RLRG(0,1);
 	_cvRLR[2] = RLRG(0,2);
@@ -365,9 +416,9 @@ void calcResAndGS_new4_MT(
 		if (!point->isGood){
 			SumNotGood0 += 1;
 			E.updateSingle((float)(point->energy[0]));
-			point->energy_new = point->energy; 
-			point->isGood_new = false;		   
-			continue;						   
+			point->energy_new = point->energy;
+			point->isGood_new = false;
+			continue;
 		}
 
 		double score[4];
@@ -391,7 +442,7 @@ void calcResAndGS_new4_MT(
 				Kv = rpt[1] / rpt[2];
 
 				if (!(Ku > 2 && Kv > 2 && Ku < (wG[lvl] - 3.5) && Kv < (hG[lvl] - 3.5) && rpt[2] > 0)){
-					continue;						   
+					continue;
 				}
 
 				guessRightRow = getInterpolatedElement(ptrRightRemapYG, (Ku+0.5)*scale-0.5, (Kv+0.5)*scale-0.5, wG[0]);
@@ -410,7 +461,7 @@ void calcResAndGS_new4_MT(
 				}
 				else{
 					int ww;
-					score[kk] = 0; 
+					score[kk] = 0;
 					for (ww = 0; ww < patternNum; ++ww){
 						int dx = patternP[ww][0];
 						int dy = patternP[ww][1];
@@ -446,9 +497,9 @@ void calcResAndGS_new4_MT(
 
 			if (idepth_idx == -1){
 				E.updateSingle((float)(point->energy[0]));
-				point->energy_new = point->energy; 
-				point->isGood_new = false;		   
-				continue;						   
+				point->energy_new = point->energy;
+				point->isGood_new = false;
+				continue;
 			}
 
 			idepth = point->idepth_candidates[idepth_idx];
@@ -501,8 +552,10 @@ void calcResAndGS_new4_MT(
 			_leftPoint[1] = curLeftPoint[1];
 			_leftPoint[2] = curLeftPoint[2];
 
-			CvMat cvleftPoint = cvMat(3,1,CV_64F,_leftPoint);
-			ComposeUV(Angular.data(), Velocity.data(), &cvRLR, &cvTLR, &cvleftPoint, idepth, leftRow, guessRightRow, UV, dUVdw, dUVdv, dUVdid, lvl);
+			cv::Mat cvleftPoint = cv::Mat(3,1,CV_64F,_leftPoint);
+
+			// std::cout << "ComposeUV" << std::endl;
+			ComposeUV(Angular.data(), Velocity.data(), cvRLR, cvTLR, cvleftPoint, idepth, leftRow, guessRightRow, UV, dUVdw, dUVdv, dUVdid, lvl);
 
 			Vec3f hitColor = getInterpolatedElement33(colorNew, UV[0], UV[1], wl);
 			double rlR = getInterpolatedElement31(colorRef, point->u + dx, point->v + dy, wl);
@@ -573,7 +626,7 @@ void calcResAndGS_new4_MT(
 
 		E.updateSingle(energy);
 		point->isGood_new = true;
-		point->energy_new[0] = energy; 
+		point->energy_new[0] = energy;
 
 		for (int i = 0; i + 3 < patternNum; i += 4)
 			acc9MT[threadID].updateSSE(
@@ -592,7 +645,7 @@ void calcResAndGS_new4_MT(
 				(float)dp0[i], (float)dp1[i], (float)dp2[i], (float)dp3[i],
 				(float)dp4[i], (float)dp5[i], (float)dp6[i], (float)dp7[i],
 				(float)r[i]);
-		
+
 
 		SumResidual += LocalResidual;
 		SumEnergy += energy;
@@ -707,7 +760,7 @@ void doStep_MT(int lvl, float lambda, Vec6f inc, int start, int end, Pnt *pts)
 
 std::vector<double> CoarseInitializer::Optimize3_withdepths_MT(std::vector<double> motionState, int pyramidLvl, bool FixTranslation)
 {
-	printDebug = false;
+	printDebug = true;
 	bool printObservability = false;
 
 	int maxIterations[] = {100, 100, 100, 100, 100}; // 100 iterations
@@ -729,10 +782,12 @@ std::vector<double> CoarseInitializer::Optimize3_withdepths_MT(std::vector<doubl
 	Vec8f b, bsc;
 	Vec3f resOld;
 
-    bool multiThread = true;
+    bool multiThread = false;
     int threadCnt = THREAD_CNT;
     int taskCnt = numPoints[lvl];
     int thread_step = int(ceil(taskCnt/threadCnt));
+
+	std::cout << "calcResAndGS_new4_MT" << std::endl;
     if(multiThread){
         std::vector<std::thread> thread_pool;
         for (int it = 0; it < threadCnt; ++it){
@@ -821,7 +876,7 @@ std::vector<double> CoarseInitializer::Optimize3_withdepths_MT(std::vector<doubl
 		Vec3 Angular_new = Angular + inc.head<3>().cast<double>();
 		Vec3 Velocity_new = Velocity + inc.tail<3>().cast<double>();
 
-
+		std::cout << "doStep_MT (loop)" << std::endl;
 		if(multiThread){
 			// printf("B\n");
 			std::vector<std::thread> thread_pool;
@@ -850,7 +905,7 @@ std::vector<double> CoarseInitializer::Optimize3_withdepths_MT(std::vector<doubl
 		Vec8f b_new, bsc_new;
 
 		Vec3f resNew;
-
+		std::cout << "calcResAndGS_new4_MT (loop)" << std::endl;
 		if(multiThread){
 			// printf("B\n");
 			std::vector<std::thread> thread_pool;
@@ -1055,7 +1110,7 @@ void CoarseInitializer::doStep(int lvl, float lambda, Vec6f inc)
 
 		sum += 1;
 
-		
+
 		float b = JbBuffer[i][8] + JbBuffer[i].head<6>().dot(inc);
 		float step = -b * JbBuffer[i][9] / (1 + lambda);
 
@@ -1070,7 +1125,7 @@ void CoarseInitializer::doStep(int lvl, float lambda, Vec6f inc)
 
 		float newIdepth = pts[i].idepth + step;
 		if (newIdepth < 1e-3)
-			newIdepth = 1e-3; 
+			newIdepth = 1e-3;
 		if (newIdepth > 50)
 			newIdepth = 50;
 		pts[i].idepth_new = newIdepth;
@@ -1090,9 +1145,9 @@ void CoarseInitializer::applyStep(int lvl)
 			continue;
 		}
 		pts[i].energy = pts[i].energy_new;
-		pts[i].isGood = pts[i].isGood_new; 
+		pts[i].isGood = pts[i].isGood_new;
 		pts[i].idepth = pts[i].idepth_new;
-		pts[i].lastHessian = pts[i].lastHessian_new; 
+		pts[i].lastHessian = pts[i].lastHessian_new;
 	}
 	std::swap<Vec10f *>(JbBuffer, JbBuffer_new);
 }
@@ -1140,16 +1195,16 @@ void CoarseInitializer::makeNN()
 			for (int k = 0; k < nn; k++)
 			{
 				pts[i].neighbours[myidx] = ret_index[k];
-				float df = expf(-ret_dist[k] * NNDistFactor); 
+				float df = expf(-ret_dist[k] * NNDistFactor);
 				sumDF += df;
 				pts[i].neighboursDist[myidx] = df;
 				assert(ret_index[k] >= 0 && ret_index[k] < npts);
 				myidx++;
 			}
 			for (int k = 0; k < nn; k++)
-				pts[i].neighboursDist[k] *= 10 / sumDF; 
+				pts[i].neighboursDist[k] *= 10 / sumDF;
 
-			if (lvl < PyrLevelsUsedG - 1) 
+			if (lvl < PyrLevelsUsedG - 1)
 			{
 				resultSet1.init(ret_index, ret_dist);
 				pt = pt * 0.5f - Vec2f(0.25f, 0.25f);

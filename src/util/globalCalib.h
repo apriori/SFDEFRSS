@@ -1,6 +1,6 @@
 /**
 * This file is part of DSO.
-* 
+*
 * Copyright 2016 Technical University of Munich and Intel.
 * Developed by Jakob Engel <engelj at in dot tum dot de>,
 * for more information see <http://vision.in.tum.de/dso>.
@@ -27,6 +27,9 @@
 #include "settings.h"
 #include "NumType.h"
 #include "string.h"
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/opencv.hpp>
 
