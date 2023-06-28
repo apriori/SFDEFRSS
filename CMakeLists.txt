@@ -12,6 +12,8 @@ if(${CMAKE_VERSION} VERSION_EQUAL 3.7 OR ${CMAKE_VERSION} VERSION_GREATER 3.7)
   option(AUTO_DETECT_ARCH "Detect local GPU compute arch automatically" ON)
 endif()
 
+find_package(OpenMP)
+
 MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
 # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall  -g -O3 -march=native ")
@@ -102,6 +104,7 @@ ${EIGEN3_LIBS}
 ${CUDA_LIBRARIES}
 Boost::system
 #Sophus
+OpenMP::OpenMP_CXX
 )
 
 # Build examples

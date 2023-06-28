@@ -330,7 +330,7 @@ int SaveStates(std::filesystem::path path, vector<vector<double>> States){
 
 int System::Run2(const cv::Mat & leftImage, const cv::Mat & rightImage, double tframe, string imageName){
 
-    bool IsSave = true;
+    bool IsSave = false;
     bool IsShow = false;
     int endLvl = 1;
 

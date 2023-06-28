@@ -318,16 +318,17 @@ int CensusTransformCircle_Test(uint32_t * dest, uint8_t * img, int img_h, int im
 
 	int half_kw = radius / 2;
 	int half_kh = radius / 2;
-	uint32_t f = 0;
+	
 	uint32_t invalid = 1 << 31;
 
 	// std::cout << "Image width: " << img_w << std::endl;
 	// std::cout << "Image height: " << img_h << std::endl;
 
 
+#pragma omp parallel for
 	for(int y = half_kh; y < img_h - half_kh; ++y){
 		for(int x = half_kw; x < img_w - half_kw; ++x){
-			f = 0;
+			uint32_t f = 0; 
 
 			if (mptrdispscale[y*img_w + x] == 0){ // mask  = Null, in final mode
 				continue;
@@ -1750,6 +1751,7 @@ int RenderMT(int start, int end, int lvl, uint8_t * ptrSrc, unsigned int * ptrBu
 	for (int iid = start; iid < end; ++iid){
 		int targetIndex = iid*wG[lvl]*hG[lvl];
 		uint8_t * ptrCurIntensity = (uint8_t * )(ptrBuffer + targetIndex);
+#pragma omp parallel for
 		for (int vv = 0; vv < hG[lvl]; ++vv){
 			for (int uu = 0; uu < wG[lvl]; ++uu){
 				int destIdx = vv*wG[lvl] + uu;
